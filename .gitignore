@@ -1,0 +1,19 @@
+# Segredos
+.env
+
+# Dados gerados pelos scrapers
+dados_supermercados/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Ferramentas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

@@ -1,0 +1,31 @@
+import json
+
+import pytest
+
+from nextprice.ai.prompts import build_prompt, parse_ai_response
+
+
+def test_build_prompt_inclui_loja_termo_e_blocos() -> None:
+    prompt = build_prompt(
+        "LojaTeste", "tomate", ["Tomate 1kg - R$ 7,79", "Molho de tomate - R$ 3,50"]
+    )
+    assert "LojaTeste" in prompt
+    assert "tomate" in prompt
+    assert "Tomate 1kg - R$ 7,79" in prompt
+    assert "Molho de tomate - R$ 3,50" in prompt
+
+
+def test_parse_ai_response_json_valido() -> None:
+    raw = json.dumps([{"nome": "Tomate 1kg", "preco": "R$ 7,79"}])
+    dados = parse_ai_response(raw)
+    assert dados == [{"nome": "Tomate 1kg", "preco": "R$ 7,79"}]
+
+
+def test_parse_ai_response_json_invalido_levanta_value_error() -> None:
+    with pytest.raises(ValueError, match="JSON válido"):
+        parse_ai_response("isso não é json")
+
+
+def test_parse_ai_response_nao_lista_levanta_value_error() -> None:
+    with pytest.raises(ValueError, match="lista"):
+        parse_ai_response(json.dumps({"nome": "Tomate"}))

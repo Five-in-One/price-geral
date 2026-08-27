@@ -1,0 +1,44 @@
+[project]
+name = "nextprice"
+version = "0.1.0"
+description = "Bot de coleta e comparação de preços de supermercados via scraping e IA."
+requires-python = ">=3.10"
+dependencies = [
+    "playwright>=1.40",
+    "google-genai>=0.3",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+nextprice = "nextprice.cli.main:main"
+nextprice-extract = "nextprice.cli.extractor:main"
+nextprice-track = "nextprice.cli.tracker:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nextprice"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+disallow_untyped_defs = false
