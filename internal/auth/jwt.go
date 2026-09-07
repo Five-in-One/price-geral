@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"priceauth/internal/models"
 )
 
 var (
@@ -15,19 +17,22 @@ var (
 )
 
 // Claims are the JWT claims price-auth issues and verifies. Other services
-// that trust the same JWT_SECRET can decode these to identify the caller.
+// that trust the same JWT_SECRET can decode these to identify the caller
+// and their role without a DB round-trip.
 type Claims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
+	UserID   string      `json:"user_id"`
+	Username string      `json:"username"`
+	Role     models.Role `json:"role"`
 	jwt.RegisteredClaims
 }
 
 // GenerateToken issues a signed access token for the given user.
-func GenerateToken(secret, userID, email string) (string, error) {
+func GenerateToken(secret, userID, username string, role models.Role) (string, error) {
 	now := time.Now()
 	claims := Claims{
-		UserID: userID,
-		Email:  email,
+		UserID:   userID,
+		Username: username,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
 			IssuedAt:  jwt.NewNumericDate(now),

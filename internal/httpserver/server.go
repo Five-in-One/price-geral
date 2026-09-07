@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"priceauth/internal/models"
 	"priceauth/internal/repository"
 )
 
@@ -34,6 +35,12 @@ func NewRouter(pool *pgxpool.Pool, jwtSecret string) *chi.Mux {
 		auth.Group(func(protected chi.Router) {
 			protected.Use(requireAuth(jwtSecret))
 			protected.Get("/me", meHandler(usersRepo))
+		})
+
+		auth.Route("/admin", func(adminOnly chi.Router) {
+			adminOnly.Use(requireAuth(jwtSecret))
+			adminOnly.Use(requireRole(models.RoleAdmin))
+			adminOnly.Post("/users", createUserHandler(usersRepo))
 		})
 	})
 

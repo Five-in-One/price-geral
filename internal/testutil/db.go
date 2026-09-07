@@ -49,6 +49,17 @@ func NewTestPool(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("truncate test tables: %v", err)
 	}
 
+	// The seed migration only runs once; re-run it after truncating so
+	// every test still has the bootstrap admin@price.com account.
+	if _, err := pool.Exec(ctx, `DELETE FROM schema_migrations WHERE version = '0003_seed_admin.sql'`); err != nil {
+		pool.Close()
+		t.Fatalf("unmark seed migration: %v", err)
+	}
+	if err := db.Migrate(ctx, pool); err != nil {
+		pool.Close()
+		t.Fatalf("re-seed test database: %v", err)
+	}
+
 	t.Cleanup(pool.Close)
 
 	return pool

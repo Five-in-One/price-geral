@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	ErrEmailTaken = errors.New("email already registered")
-	ErrNotFound   = errors.New("user not found")
+	ErrUsernameTaken = errors.New("username already taken")
+	ErrNotFound      = errors.New("user not found")
 )
 
 const uniqueViolationCode = "23505"
@@ -26,19 +26,19 @@ func NewUsersRepo(pool *pgxpool.Pool) *UsersRepo {
 	return &UsersRepo{pool: pool}
 }
 
-// Create inserts a new user with an already-hashed password and returns its
-// public representation.
-func (r *UsersRepo) Create(ctx context.Context, email, passwordHash string) (models.User, error) {
+// Create inserts a new user with an already-hashed password and the given
+// role, and returns its public representation.
+func (r *UsersRepo) Create(ctx context.Context, username, passwordHash string, role models.Role) (models.User, error) {
 	var u models.User
 	err := r.pool.QueryRow(ctx, `
-		INSERT INTO users (email, password_hash)
-		VALUES ($1, $2)
-		RETURNING id, email, created_at
-	`, email, passwordHash).Scan(&u.ID, &u.Email, &u.CreatedAt)
+		INSERT INTO users (username, password_hash, role)
+		VALUES ($1, $2, $3)
+		RETURNING id, username, role, created_at
+	`, username, passwordHash, role).Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolationCode {
-			return models.User{}, ErrEmailTaken
+			return models.User{}, ErrUsernameTaken
 		}
 		return models.User{}, err
 	}
@@ -52,13 +52,13 @@ type credentials struct {
 	PasswordHash string
 }
 
-func (r *UsersRepo) findByEmailWithHash(ctx context.Context, email string) (credentials, error) {
+func (r *UsersRepo) findByUsernameWithHash(ctx context.Context, username string) (credentials, error) {
 	var c credentials
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, email, created_at, password_hash
+		SELECT id, username, role, created_at, password_hash
 		FROM users
-		WHERE email = $1
-	`, email).Scan(&c.User.ID, &c.User.Email, &c.User.CreatedAt, &c.PasswordHash)
+		WHERE username = $1
+	`, username).Scan(&c.User.ID, &c.User.Username, &c.User.Role, &c.User.CreatedAt, &c.PasswordHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return credentials{}, ErrNotFound
@@ -68,11 +68,11 @@ func (r *UsersRepo) findByEmailWithHash(ctx context.Context, email string) (cred
 	return c, nil
 }
 
-// VerifyCredentials looks up a user by email and reports whether the given
-// password matches, using the supplied checker (kept decoupled from the
-// bcrypt implementation so the repository has no hashing dependency).
-func (r *UsersRepo) VerifyCredentials(ctx context.Context, email, password string, checkPassword func(hash, password string) bool) (models.User, error) {
-	c, err := r.findByEmailWithHash(ctx, email)
+// VerifyCredentials looks up a user by username and reports whether the
+// given password matches, using the supplied checker (kept decoupled from
+// the bcrypt implementation so the repository has no hashing dependency).
+func (r *UsersRepo) VerifyCredentials(ctx context.Context, username, password string, checkPassword func(hash, password string) bool) (models.User, error) {
+	c, err := r.findByUsernameWithHash(ctx, username)
 	if err != nil {
 		return models.User{}, err
 	}
@@ -85,10 +85,10 @@ func (r *UsersRepo) VerifyCredentials(ctx context.Context, email, password strin
 func (r *UsersRepo) FindByID(ctx context.Context, id string) (models.User, error) {
 	var u models.User
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, email, created_at
+		SELECT id, username, role, created_at
 		FROM users
 		WHERE id = $1
-	`, id).Scan(&u.ID, &u.Email, &u.CreatedAt)
+	`, id).Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.User{}, ErrNotFound

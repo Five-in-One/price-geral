@@ -3,10 +3,12 @@ package auth
 import (
 	"testing"
 	"time"
+
+	"priceauth/internal/models"
 )
 
 func TestGenerateAndParseToken_RoundTrip(t *testing.T) {
-	token, err := GenerateToken("test-secret", "user-123", "alice@example.com")
+	token, err := GenerateToken("test-secret", "user-123", "alice", models.RoleCompany)
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
@@ -19,13 +21,16 @@ func TestGenerateAndParseToken_RoundTrip(t *testing.T) {
 	if claims.UserID != "user-123" {
 		t.Errorf("expected UserID user-123, got %s", claims.UserID)
 	}
-	if claims.Email != "alice@example.com" {
-		t.Errorf("expected Email alice@example.com, got %s", claims.Email)
+	if claims.Username != "alice" {
+		t.Errorf("expected Username alice, got %s", claims.Username)
+	}
+	if claims.Role != models.RoleCompany {
+		t.Errorf("expected Role company, got %s", claims.Role)
 	}
 }
 
 func TestParseToken_WrongSecret_Fails(t *testing.T) {
-	token, err := GenerateToken("test-secret", "user-123", "alice@example.com")
+	token, err := GenerateToken("test-secret", "user-123", "alice", models.RoleCompany)
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
@@ -40,7 +45,7 @@ func TestParseToken_Expired_Fails(t *testing.T) {
 	AccessTokenTTL = -1 * time.Hour // force an already-expired token
 	defer func() { AccessTokenTTL = original }()
 
-	token, err := GenerateToken("test-secret", "user-123", "alice@example.com")
+	token, err := GenerateToken("test-secret", "user-123", "alice", models.RoleCompany)
 	if err != nil {
 		t.Fatalf("GenerateToken: %v", err)
 	}
