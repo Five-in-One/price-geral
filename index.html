@@ -5,9 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Price — Painel Administrativo</title>
 <link rel="icon" type="image/svg+xml" href="logo-price.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
 <style>
   :root {
     --primary: #2A5CB9;
+    --primary-dark: #1B3E82;
     --primary-bg: #E3ECFA;
     --ink: #1C1C1E;
     --gray: #636366;
@@ -19,7 +23,7 @@
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Alexandria", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: #fff;
     color: var(--ink);
   }
@@ -30,6 +34,7 @@
     padding: 16px 24px;
     border-bottom: 1px solid var(--border);
   }
+  header[hidden] { display: none; }
   header .badge {
     width: 28px; height: 28px;
     display: flex; align-items: center; justify-content: center;
@@ -37,6 +42,8 @@
   header .badge img { width: 100%; height: 100%; }
   header h1 { font-size: 18px; margin: 0; font-weight: 800; color: var(--primary); }
   header span.subtitle { color: var(--gray-light); font-size: 13px; margin-left: 4px; }
+  header .spacer { flex: 1; }
+  header .who { font-size: 13px; color: var(--gray); margin-right: 12px; }
 
   main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 
@@ -50,7 +57,7 @@
     border: 1px solid var(--border); border-radius: 12px; padding: 20px; background: var(--bg);
   }
 
-  .collect-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .collect-form, .user-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
   .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 220px; }
   .field label { font-size: 12px; color: var(--gray); font-weight: 600; }
   input, select {
@@ -62,6 +69,7 @@
     color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
   }
   button.primary { background: var(--primary); }
+  button.ghost { background: transparent; color: var(--gray); border: 1px solid var(--border); }
   button:disabled { opacity: 0.5; cursor: default; }
 
   .toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -84,22 +92,147 @@
 
   .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 6px; vertical-align: -2px; }
 
-  #collectStatus { margin-top: 12px; font-size: 13px; }
-  #collectStatus.error { color: var(--red); }
-  #collectStatus.ok { color: var(--primary); }
+  #collectStatus, #userStatus { margin-top: 12px; font-size: 13px; }
+  #collectStatus.error, #userStatus.error { color: var(--red); }
+  #collectStatus.ok, #userStatus.ok { color: var(--primary); }
 
   .empty { color: var(--gray-light); font-size: 13px; padding: 16px; text-align: center; }
+
+  /* Login screen — split layout: illustration left, form right */
+  #loginScreen { display: flex; min-height: 100vh; }
+  #loginScreen[hidden] { display: none; }
+
+  .illustration-panel {
+    flex: 1 1 45%; min-width: 320px; position: relative; overflow: hidden;
+    background: linear-gradient(160deg, var(--primary) 0%, var(--primary-dark) 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .deco-circle { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.08); }
+  .deco-1 { width: 320px; height: 320px; top: -80px; left: -80px; }
+  .deco-2 { width: 200px; height: 200px; bottom: -60px; right: -30px; }
+  .hero { position: relative; width: 220px; height: 220px; display: flex; align-items: center; justify-content: center; }
+  .hero-logo { width: 130px; height: 130px; background: #fff; border-radius: 32px; padding: 20px; box-shadow: 0 12px 28px rgba(0,0,0,0.22); }
+  .floating-chip {
+    position: absolute; width: 44px; height: 44px; border-radius: 50%; background: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 20px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.2);
+  }
+  .chip-1 { top: -14px; right: -14px; }
+  .chip-2 { bottom: 6px; left: -34px; }
+  .chip-3 { top: 46%; left: -54px; }
+  .chip-4 { bottom: -18px; right: 30px; }
+  .hero-tagline {
+    position: absolute; bottom: 48px; left: 0; right: 0; text-align: center; padding: 0 40px;
+    color: #fff; font-size: 15px; font-weight: 700;
+  }
+  .hero-tagline span { display: block; font-size: 12px; font-weight: 500; opacity: 0.8; margin-top: 4px; }
+  @media (max-width: 760px) { .illustration-panel { display: none; } }
+
+  .form-panel { flex: 1 1 55%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+  .login-card { width: 100%; max-width: 360px; }
+  .login-card .brand { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px; }
+  .login-card .brand img { width: 26px; height: 26px; }
+  .login-card .brand span { font-size: 17px; font-weight: 800; color: var(--primary); }
+  .login-card h2 {
+    font-size: 22px; font-weight: 900; color: var(--ink); margin: 0 0 4px; text-align: center;
+  }
+  .login-card p.lead { color: var(--gray); font-size: 13px; margin: 0 0 22px; text-align: center; }
+  .login-card .field { min-width: 0; margin-bottom: 14px; }
+  .login-card button { width: 100%; }
+  .login-options {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px; font-size: 13px;
+  }
+  .login-options label { display: flex; align-items: center; gap: 6px; color: var(--gray); cursor: pointer; }
+  .login-options input[type="checkbox"] { width: 14px; height: 14px; margin: 0; }
+  .login-options a { color: var(--primary); text-decoration: none; cursor: pointer; }
+  .login-options a:hover { text-decoration: underline; }
+  #forgotNote {
+    font-size: 12px; color: var(--gray); background: var(--primary-bg); border-radius: 8px;
+    padding: 10px 12px; margin: -6px 0 14px;
+  }
+  #forgotNote[hidden] { display: none; }
+
+  .password-wrap { position: relative; }
+  .password-wrap input { width: 100%; padding-right: 40px; }
+  .password-wrap .toggle-password {
+    position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
+    width: auto; height: auto; margin: 0; padding: 6px;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--gray-light); cursor: pointer;
+  }
+  .password-wrap .toggle-password:hover { color: var(--ink); }
+  .password-wrap .toggle-password svg { display: block; }
+
+  #loginStatus { margin-top: 12px; font-size: 13px; color: var(--red); text-align: center; }
+  .copyright { margin-top: 32px; font-size: 12px; color: var(--gray-light); text-align: center; }
 </style>
 </head>
 <body>
 
-<header>
+<header id="appHeader" hidden>
   <div class="badge"><img src="logo-price.svg" alt="Price" /></div>
   <h1>Price</h1>
   <span class="subtitle">Painel Administrativo</span>
+  <div class="spacer"></div>
+  <span class="who" id="whoAmI" hidden></span>
+  <button class="ghost" id="logoutBtn" onclick="logout()" hidden>Sair</button>
 </header>
 
-<main>
+<div id="loginScreen">
+  <div class="illustration-panel">
+    <div class="deco-circle deco-1"></div>
+    <div class="deco-circle deco-2"></div>
+    <div class="hero">
+      <img src="logo-price.svg" class="hero-logo" alt="" aria-hidden="true" />
+      <div class="floating-chip chip-1">🍅</div>
+      <div class="floating-chip chip-2">🥛</div>
+      <div class="floating-chip chip-3">🥦</div>
+      <div class="floating-chip chip-4">🍞</div>
+    </div>
+    <p class="hero-tagline">
+      Compare preços entre mercados perto de você
+      <span>e economize em toda lista de compras.</span>
+    </p>
+  </div>
+
+  <div class="form-panel">
+    <div class="login-card">
+      <div class="brand">
+        <img src="logo-price.svg" alt="" aria-hidden="true" />
+        <span>Price</span>
+      </div>
+      <h2>Entrar</h2>
+      <p class="lead">Acesso restrito à equipe interna do Price.</p>
+
+      <div class="field">
+        <label for="loginUsername">Usuário</label>
+        <input id="loginUsername" type="text" placeholder="admin" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label for="loginPassword">Senha</label>
+        <div class="password-wrap">
+          <input id="loginPassword" type="password" placeholder="••••••••" />
+          <button type="button" class="toggle-password" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="Mostrar senha">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="login-options">
+        <label><input type="checkbox" id="rememberMe" checked /> Lembrar-me</label>
+        <a id="forgotLink" onclick="toggleForgotNote()">Esqueceu a senha?</a>
+      </div>
+      <p id="forgotNote" hidden>Fale com um administrador do Price para redefinir sua senha.</p>
+
+      <button class="primary" id="loginBtn" onclick="login()">Entrar</button>
+      <div id="loginStatus"></div>
+    </div>
+    <p class="copyright">Price © 2026 · Todos os direitos reservados</p>
+  </div>
+</div>
+
+<main id="app" hidden>
   <section>
     <h2>Coleta sob demanda</h2>
     <div class="card">
@@ -115,6 +248,36 @@
         <button class="primary" id="collectBtn" onclick="runCollect()">Coletar com IA</button>
       </div>
       <div id="collectStatus"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Novo usuário</h2>
+    <div class="card">
+      <div class="user-form">
+        <div class="field">
+          <label for="newUserUsername">Usuário</label>
+          <input id="newUserUsername" type="text" placeholder="nome-de-usuario" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="newUserPassword">Senha</label>
+          <div class="password-wrap">
+            <input id="newUserPassword" type="password" placeholder="mínimo 8 caracteres" />
+            <button type="button" class="toggle-password" onclick="togglePasswordVisibility('newUserPassword', this)" aria-label="Mostrar senha">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="field" style="flex: 0 0 180px; min-width: 160px;">
+          <label for="newUserRole">Tipo de conta</label>
+          <select id="newUserRole">
+            <option value="company">Empresa parceira</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+        <button class="primary" id="newUserBtn" onclick="createUser()">Cadastrar</button>
+      </div>
+      <div id="userStatus"></div>
     </div>
   </section>
 
@@ -161,7 +324,9 @@
 
 <script>
   const PRICE_BACK_URL = "http://localhost:8080";
+  const PRICE_AUTH_URL = "http://localhost:8081";
   const COLLECT_API_URL = "http://localhost:8085";
+  const SESSION_KEY = "price_admin_session";
 
   const sourceLabel = { seed: "Demo", company: "Empresa", bot: "Bot" };
 
@@ -174,6 +339,157 @@
   function formatBRL(value) {
     return "R$ " + Number(value).toFixed(2).replace(".", ",");
   }
+
+  // --- Auth ---------------------------------------------------------------
+  // "Lembrar-me" marcado -> sessão sobrevive ao fechar o navegador (localStorage).
+  // Desmarcado -> sessão vale só para esta aba (sessionStorage).
+
+  function getSession() {
+    try {
+      return JSON.parse(localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY) || "null");
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function setSession(session, remember) {
+    if (remember) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      sessionStorage.removeItem(SESSION_KEY);
+    } else {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      localStorage.removeItem(SESSION_KEY);
+    }
+  }
+
+  function clearSession() {
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
+  }
+
+  function authHeader() {
+    const session = getSession();
+    return session ? { Authorization: "Bearer " + session.access_token } : {};
+  }
+
+  function toggleForgotNote() {
+    const note = document.getElementById("forgotNote");
+    note.hidden = !note.hidden;
+  }
+
+  const EYE_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.4 20.4 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a20.5 20.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+  function togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    const willShow = input.type === "password";
+    input.type = willShow ? "text" : "password";
+    btn.innerHTML = willShow ? EYE_OFF_ICON : EYE_ICON;
+    btn.setAttribute("aria-label", willShow ? "Ocultar senha" : "Mostrar senha");
+  }
+
+  function showApp(session) {
+    document.getElementById("loginScreen").hidden = true;
+    document.getElementById("appHeader").hidden = false;
+    document.getElementById("app").hidden = false;
+    document.getElementById("whoAmI").hidden = false;
+    document.getElementById("whoAmI").textContent = session.user.username;
+    document.getElementById("logoutBtn").hidden = false;
+    loadMarkets();
+    loadProducts();
+  }
+
+  function showLogin() {
+    document.getElementById("loginScreen").hidden = false;
+    document.getElementById("appHeader").hidden = true;
+    document.getElementById("app").hidden = true;
+    document.getElementById("whoAmI").hidden = true;
+    document.getElementById("logoutBtn").hidden = true;
+  }
+
+  async function login() {
+    const username = document.getElementById("loginUsername").value.trim();
+    const password = document.getElementById("loginPassword").value;
+    const remember = document.getElementById("rememberMe").checked;
+    const statusEl = document.getElementById("loginStatus");
+    const btn = document.getElementById("loginBtn");
+
+    statusEl.textContent = "";
+    if (!username || !password) {
+      statusEl.textContent = "Informe usuário e senha.";
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch(PRICE_AUTH_URL + "/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.textContent = data.error || "Falha ao entrar.";
+        return;
+      }
+      if (data.user.role !== "admin") {
+        statusEl.textContent = "Esta conta não tem acesso ao Painel Administrativo.";
+        return;
+      }
+      setSession(data, remember);
+      showApp(data);
+    } catch (e) {
+      statusEl.textContent = "Não foi possível falar com o servidor de autenticação (price-auth está rodando na porta 8081?).";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function logout() {
+    clearSession();
+    showLogin();
+  }
+
+  async function createUser() {
+    const username = document.getElementById("newUserUsername").value.trim();
+    const password = document.getElementById("newUserPassword").value;
+    const role = document.getElementById("newUserRole").value;
+    const statusEl = document.getElementById("userStatus");
+    const btn = document.getElementById("newUserBtn");
+
+    statusEl.className = "";
+    if (!username || password.length < 8) {
+      statusEl.className = "error";
+      statusEl.textContent = "Informe um usuário e uma senha com pelo menos 8 caracteres.";
+      return;
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch(PRICE_AUTH_URL + "/auth/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ username, password, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.className = "error";
+        statusEl.textContent = data.error || "Não foi possível criar o usuário.";
+        return;
+      }
+      statusEl.className = "ok";
+      statusEl.textContent = `Usuário "${data.username}" (${data.role === "admin" ? "administrador" : "empresa parceira"}) criado com sucesso.`;
+      document.getElementById("newUserUsername").value = "";
+      document.getElementById("newUserPassword").value = "";
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = "Não foi possível falar com o servidor de autenticação (price-auth está rodando na porta 8081?).";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // --- Data tables ----------------------------------------------------------
 
   async function loadMarkets() {
     const search = document.getElementById("marketSearch").value.trim();
@@ -277,8 +593,12 @@
     }
   }
 
-  loadMarkets();
-  loadProducts();
+  const existingSession = getSession();
+  if (existingSession && existingSession.user && existingSession.user.role === "admin") {
+    showApp(existingSession);
+  } else {
+    showLogin();
+  }
 </script>
 
 </body>
