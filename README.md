@@ -43,8 +43,17 @@ para o estado seedado antes de cada teste.
 |---|---|---|
 | GET | `/health` | healthcheck |
 | GET | `/api/markets?lat=&lng=&radius_km=` | mercados dentro do raio (padrão 5km), ordenados por distância |
-| GET | `/api/products?category=&search=&sort=price_asc` | busca/filtra produtos |
+| GET | `/api/markets?all=true&search=` | todos os mercados (ignora raio), com busca por nome — usado pelo Painel Admin |
+| POST | `/api/markets` | cria um mercado (ou reaproveita um já existente com o mesmo nome) — `{name, latitude?, longitude?, initials?, primary_color?, background_color?, source?}` |
+| GET | `/api/products?category=&search=&sort=price_asc&source=` | busca/filtra produtos (filtro `source`: `seed`\|`company`\|`bot`) |
+| POST | `/api/products` | cria/atualiza um produto e seu preço em um mercado — `{name, unit, category, price, market_id\|market_name, source?}` |
 | POST | `/api/comparisons` | compara o custo de uma lista `{items:[{product_id,quantity}]}` entre todos os mercados |
 
 Histórico de economia (`/api/savings-history`, `/api/economy/summary`)
 mudou para o serviço `price-user` — veja `../price-user/README.md`.
+
+As rotas `POST /api/markets` e `POST /api/products` alimentam duas telas
+Web (fora deste repo): `price-admin-web` (Painel Administrativo) e
+`price-empresa-web` (Página da Empresa). Cada mercado/produto criado por
+elas carrega `source: "company"` ou `"bot"` para diferenciar da massa de
+dados seedada (`source: "seed"`).

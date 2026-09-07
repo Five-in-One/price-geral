@@ -1,9 +1,11 @@
 package httpserver
 
 import (
+	"encoding/json"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -24,6 +26,7 @@ func marketsRouter(pool *pgxpool.Pool) chi.Router {
 
 	r := chi.NewRouter()
 	r.Get("/", listMarketsHandler(repo))
+	r.Post("/", createMarketHandler(repo))
 	return r
 }
 
@@ -44,6 +47,10 @@ func listMarketsHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid radius_km"})
 			return
 		}
+		// Admin panel view: ignore distance entirely and optionally filter
+		// by name, so it can browse every registered market.
+		showAll := req.URL.Query().Get("all") == "true"
+		search := strings.ToLower(strings.TrimSpace(req.URL.Query().Get("search")))
 
 		markets, err := repo.ListAll(req.Context())
 		if err != nil {
@@ -53,17 +60,96 @@ func listMarketsHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 
 		results := make([]models.MarketWithDistance, 0, len(markets))
 		for _, m := range markets {
+			if search != "" && !strings.Contains(strings.ToLower(m.Name), search) {
+				continue
+			}
+
 			d := geo.HaversineKm(lat, lng, m.Latitude, m.Longitude)
-			if d <= radiusKm {
+			if showAll || d <= radiusKm {
 				results = append(results, models.MarketWithDistance{Market: m, DistanceKm: round2(d)})
 			}
 		}
 
-		sort.Slice(results, func(i, j int) bool {
-			return results[i].DistanceKm < results[j].DistanceKm
-		})
+		if showAll {
+			sort.Slice(results, func(i, j int) bool {
+				return results[i].Name < results[j].Name
+			})
+		} else {
+			sort.Slice(results, func(i, j int) bool {
+				return results[i].DistanceKm < results[j].DistanceKm
+			})
+		}
 
 		writeJSON(w, http.StatusOK, results)
+	}
+}
+
+type createMarketRequest struct {
+	Name            string   `json:"name"`
+	Initials        string   `json:"initials"`
+	Latitude        *float64 `json:"latitude"`
+	Longitude       *float64 `json:"longitude"`
+	PrimaryColor    string   `json:"primary_color"`
+	BackgroundColor string   `json:"background_color"`
+	Source          string   `json:"source"`
+}
+
+func createMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		var body createMarketRequest
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+			return
+		}
+
+		name := strings.TrimSpace(body.Name)
+		if name == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
+			return
+		}
+
+		source := body.Source
+		if source == "" {
+			source = "company"
+		}
+		if source != "company" && source != "bot" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "source must be 'company' or 'bot'"})
+			return
+		}
+
+		lat, lng := defaultUserLat, defaultUserLng
+		if body.Latitude != nil {
+			lat = *body.Latitude
+		}
+		if body.Longitude != nil {
+			lng = *body.Longitude
+		}
+
+		initials := body.Initials
+		if initials == "" {
+			initials = deriveInitials(name)
+		}
+
+		primary, background := body.PrimaryColor, body.BackgroundColor
+		if primary == "" || background == "" {
+			primary, background = pickPalette(name)
+		}
+
+		market, err := repo.FindOrCreate(req.Context(), repository.CreateMarketInput{
+			Name:            name,
+			Initials:        initials,
+			Latitude:        lat,
+			Longitude:       lng,
+			PrimaryColor:    primary,
+			BackgroundColor: background,
+			Source:          source,
+		})
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create market"})
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, market)
 	}
 }
 
