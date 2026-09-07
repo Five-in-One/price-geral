@@ -5,12 +5,12 @@ import logging
 from google import genai
 from google.genai import types
 
-from nextprice.ai.prompts import build_prompt, parse_ai_response
+from nextprice.ai.prompts import build_generic_extraction_prompt, build_prompt, parse_ai_response
 from nextprice.config import Settings
 
 logger = logging.getLogger(__name__)
 
-_MODEL = "gemini-2.5-flash"
+_MODEL = "gemini-3.6-flash"
 
 
 class GeminiClient:
@@ -38,6 +38,34 @@ class GeminiClient:
             produtos = parse_ai_response(response.text)
         except Exception:
             logger.warning("[%s] Falha ao processar resultados com a IA.", loja, exc_info=True)
+            return []
+
+        for item in produtos:
+            item["loja"] = loja
+        return produtos
+
+    def extract_products_generic(self, loja: str, card_texts: list[str]) -> list[dict]:
+        """Como extract_products, mas sem termo de busca: usada pela coleta
+        sob demanda do painel administrativo, onde a página é desconhecida e
+        a IA também estima categoria/unidade de cada produto."""
+        if not card_texts:
+            return []
+
+        prompt = build_generic_extraction_prompt(loja, card_texts)
+        try:
+            response = self._client.models.generate_content(
+                model=_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.1,
+                ),
+            )
+            if response.text is None:
+                raise ValueError("Resposta da IA veio vazia (sem texto).")
+            produtos = parse_ai_response(response.text)
+        except Exception:
+            logger.warning("[%s] Falha ao processar coleta genérica com a IA.", loja, exc_info=True)
             return []
 
         for item in produtos:

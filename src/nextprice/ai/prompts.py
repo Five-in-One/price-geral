@@ -25,6 +25,43 @@ def build_prompt(loja: str, termo: str, card_texts: list[str]) -> str:
     return PROMPT_TEMPLATE.format(loja=loja, termo=termo, blocos=blocos)
 
 
+CATEGORIES = ("HORTIFRUTI", "GRÃOS", "LATICÍNIOS", "CARNES", "OUTROS")
+
+GENERIC_EXTRACTION_PROMPT_TEMPLATE = """
+Analise os blocos de produtos abaixo, extraídos de uma página de supermercado
+('{loja}'). Extraia todos os produtos de mercearia/alimentos válidos que
+aparecem — ignore banners, menus, links de navegação e qualquer bloco que não
+seja claramente um produto com preço.
+
+Para cada produto, classifique a categoria em EXATAMENTE uma destas opções:
+{categorias}. Se nenhuma se aplicar bem, use "OUTROS". Estime também a
+unidade de venda mais provável (ex.: "kg", "un", "pct", "L") a partir do
+nome do produto; se não for possível saber, use "un".
+
+Retorne a resposta EXATAMENTE no formato de uma lista JSON válida de objetos,
+onde cada objeto tem as chaves "nome", "preco", "categoria" e "unidade".
+Exemplo:
+[
+  {{"nome": "Tomate Longa Vida 1kg", "preco": "R$ 7,79",
+    "categoria": "HORTIFRUTI", "unidade": "kg"}}
+]
+Se não encontrar nenhum produto, retorne [].
+
+Blocos de Produtos:
+{blocos}
+"""
+
+
+def build_generic_extraction_prompt(loja: str, card_texts: list[str]) -> str:
+    """Monta o prompt de extração genérica (sem termo de busca) usado pela
+    coleta sob demanda do painel administrativo: dado o texto bruto de uma
+    página desconhecida, a IA extrai produto/preço/categoria/unidade."""
+    blocos = "\n---\n".join(card_texts)
+    return GENERIC_EXTRACTION_PROMPT_TEMPLATE.format(
+        loja=loja, categorias=", ".join(CATEGORIES), blocos=blocos
+    )
+
+
 def parse_ai_response(raw_text: str) -> list[dict]:
     """Valida e converte a resposta JSON da IA em uma lista de produtos.
 

@@ -7,6 +7,10 @@ dependencies = [
     "playwright>=1.40",
     "google-genai>=0.3",
     "python-dotenv>=1.0",
+    "psycopg[binary]>=3.1",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +24,7 @@ dev = [
 nextprice = "nextprice.cli.main:main"
 nextprice-extract = "nextprice.cli.extractor:main"
 nextprice-track = "nextprice.cli.tracker:main"
+nextprice-collect-api = "nextprice.collect_api:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import logging
 
+import psycopg
 from playwright.sync_api import sync_playwright
 
+from nextprice import db
 from nextprice.ai.client import GeminiClient
 from nextprice.browser import search_and_collect_cards
 from nextprice.geo import get_user_location
 from nextprice.pricing import parse_price_brl
+from nextprice.storage import save_to_postgres
 from nextprice.stores.base import StoreConfig
 from nextprice.stores.registry import STORES
 
@@ -35,6 +38,21 @@ def buscar_na_loja(store: StoreConfig, termo: str, ai_client: GeminiClient) -> l
     return ai_client.extract_products(store.name, termo, cards_textos)
 
 
+def _connect_or_none() -> psycopg.Connection | None:
+    """Best-effort Postgres connection: the track flow must keep printing
+    its comparison even if the database isn't up."""
+    try:
+        conn = db.connect()
+        db.migrate(conn)
+        return conn
+    except psycopg.OperationalError:
+        logger.warning(
+            "Postgres indisponível — o comparativo ainda será impresso, "
+            "mas não será salvo no banco."
+        )
+        return None
+
+
 def main() -> None:
     termo = input("O que você deseja pesquisar? (Ex: tomate, arroz): ").strip()
     if not termo:
@@ -44,12 +62,26 @@ def main() -> None:
     print(f"🌍 Localização detectada: {localizacao}")
 
     ai_client = GeminiClient()
+    conn = _connect_or_none()
 
     todos_resultados: list[dict] = []
-    for store in STORES:
-        produtos_loja = buscar_na_loja(store, termo, ai_client)
-        if produtos_loja:
-            todos_resultados.extend(produtos_loja)
+    try:
+        for store in STORES:
+            produtos_loja = buscar_na_loja(store, termo, ai_client)
+            if produtos_loja:
+                todos_resultados.extend(produtos_loja)
+                if conn is not None:
+                    save_to_postgres(
+                        conn,
+                        store.key,
+                        store.name,
+                        produtos_loja,
+                        source="track",
+                        search_term=termo,
+                    )
+    finally:
+        if conn is not None:
+            conn.close()
 
     print("\n" + "=" * 50)
     print(f" COMPARATIVO INTELIGENTE PARA: '{termo.upper()}' ({localizacao})")

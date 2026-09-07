@@ -19,8 +19,42 @@ Ele é composto por dois fluxos independentes:
 | Fonte dos dados | Vitrine/página inicial de cada loja | Página de resultado de busca de cada loja |
 | Extração | Seletores CSS fixos por loja | IA (Gemini) interpreta o texto coletado |
 | Navegador | Headless (sem interface visível) | Visível, para acompanhar a busca em tempo real |
-| Saída | Arquivo JSON datado em `dados_supermercados/` | Comparativo de preços impresso no terminal |
+| Saída | Arquivo JSON datado em `dados_supermercados/` + tabela `scraped_products` no Postgres | Comparativo impresso no terminal + tabela `scraped_products` no Postgres |
 | Quando usar | Formar um histórico de preços ao longo do tempo | Consulta pontual: "onde o item X está mais barato agora" |
+
+Os dois fluxos salvam no mesmo lugar: uma tabela de **staging bruto**
+(`scraped_products`), não no formato final que o app consome
+(`markets`/`products`/`market_products`, servido pela API `price-back`).
+Isso é proposital — o bot não sabe decidir sozinho categoria, unidade, ou
+se "Tomate" numa loja é o mesmo produto que "Tomate Longa Vida 1kg" em
+outra. Ver [Persistência no Postgres](#persistência-no-postgres) abaixo.
+
+A conexão com o Postgres é *best-effort*: se o banco não estiver
+acessível, o bot avisa no log e continua funcionando normalmente (JSON
+para o extrator, impressão no terminal para o tracker) — só não persiste
+no banco naquela execução.
+
+Há um terceiro modo, diferente dos dois acima: a **coleta sob demanda**,
+uma API HTTP (`src/nextprice/collect_api.py`) que o Painel Administrativo
+(`price-admin-web`) chama quando o admin cola o link de um mercado. Ela
+acessa a URL, deixa a IA extrair produto/preço/categoria de forma
+genérica (sem termo de busca, sem seletor CSS fixo — o mercado é
+desconhecido), salva o bruto em `scraped_products` (`source: 'admin_link'`)
+e, diferente dos outros dois fluxos, **também tenta inserir direto** em
+`price-back` via `POST /api/products` (tagueado `source: "bot"`) — é o
+único dos três fluxos que promove dado da IA para a tabela final sozinho,
+sem revisão humana, seguindo o que o documento do projeto descreve para o
+Painel Admin.
+
+```bash
+python -m nextprice.collect_api   # sobe em :8085
+```
+
+Requer `price-back` rodando em `:8080` (ou `PRICE_BACK_URL` apontando para
+onde ele estiver) e uma `GEMINI_API_KEY` válida — sem uma chave real, a
+coleta roda até o passo da IA e retorna `products_extracted: 0` em vez de
+travar (testado: com uma chave inválida/placeholder, a rota devolve
+`200 OK` com a lista vazia, não um erro).
 
 ## Tecnologias utilizadas
 
@@ -29,6 +63,7 @@ Ele é composto por dois fluxos independentes:
 | Python 3.10+ | Linguagem base do bot |
 | Playwright | Automação do navegador (Chromium) para acessar e interagir com os sites das lojas |
 | Google Gemini (`google-genai`) | Interpreta os resultados de busca e extrai produto/preço de forma estruturada |
+| psycopg | Conecta ao Postgres para persistir os dados coletados |
 | python-dotenv | Carrega variáveis de ambiente a partir de um arquivo `.env` |
 | pytest | Testes automatizados da lógica de negócio |
 | ruff | Lint e formatação de código |
@@ -44,6 +79,7 @@ NextPrice/
 ├── querytracker.py
 ├── src/nextprice/
 │   ├── config.py
+│   ├── db.py
 │   ├── pricing.py
 │   ├── storage.py
 │   ├── geo.py
@@ -54,6 +90,7 @@ NextPrice/
 │       ├── main.py
 │       ├── extractor.py
 │       └── tracker.py
+├── migrations/
 ├── tests/
 ├── dados_supermercados/
 └── CLAUDE.md
@@ -64,9 +101,10 @@ NextPrice/
 | `main.py` | Ponto de entrada único do bot (`extract` / `track`) |
 | `extrator.py` | Atalho direto para o fluxo de coleta em lote |
 | `querytracker.py` | Atalho direto para o fluxo de busca interativa |
-| `src/nextprice/config.py` | Leitura e validação de variáveis de ambiente |
+| `src/nextprice/config.py` | Leitura e validação da chave do Gemini |
+| `src/nextprice/db.py` | Conexão e migrations do Postgres |
 | `src/nextprice/pricing.py` | Conversão de preços em formato brasileiro para número |
-| `src/nextprice/storage.py` | Deduplicação e escrita dos arquivos JSON |
+| `src/nextprice/storage.py` | Deduplicação/escrita dos arquivos JSON e inserção no Postgres |
 | `src/nextprice/geo.py` | Detecção da localização do usuário |
 | `src/nextprice/browser.py` | Automação de navegador com Playwright |
 | `src/nextprice/stores/` | Configuração declarativa de cada loja suportada |
@@ -74,6 +112,7 @@ NextPrice/
 | `src/nextprice/cli/main.py` | Parser de comandos e roteamento (`extract`/`track`) |
 | `src/nextprice/cli/extractor.py` | Lógica do fluxo de coleta em lote |
 | `src/nextprice/cli/tracker.py` | Lógica do fluxo de busca interativa |
+| `migrations/` | Schema SQL da tabela `scraped_products` |
 | `tests/` | Testes automatizados |
 | `dados_supermercados/` | Saída gerada pelo extrator (não versionada) |
 | `CLAUDE.md` | Regras de desenvolvimento do repositório |
@@ -84,10 +123,13 @@ NextPrice/
 | --- | --- |
 | Python 3.10 ou superior | Necessário para instalar e rodar o bot |
 | Chave de API do Google Gemini | Obtida em https://aistudio.google.com/apikey — necessária apenas para o fluxo `track` |
+| Postgres do `price-back` rodando | Opcional — sem ele o bot funciona igual, só não persiste no banco (ver [Persistência no Postgres](#persistência-no-postgres)) |
 
 > [!NOTE]
 > O fluxo `extract` funciona sem chave de API — ela só é obrigatória para o
 > fluxo `track`, que depende da IA para interpretar os resultados de busca.
+> O Postgres é opcional nos dois fluxos: nenhum dos dois exige um banco no
+> ar para rodar.
 
 ## Instalação
 
@@ -125,9 +167,10 @@ Copie o arquivo de exemplo e preencha com sua chave da API:
 cp .env.example .env
 ```
 
-| Variável | Descrição |
-| --- | --- |
-| `GEMINI_API_KEY` | Chave de API do Google Gemini, usada pelo `querytracker.py` |
+| Variável | Descrição | Obrigatória? |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | Chave de API do Google Gemini, usada pelo `querytracker.py` | Só para `track` |
+| `DATABASE_URL` | String de conexão com o Postgres (`price_bot_db`) | Não — tem um padrão pronto para o Postgres do `price-back` local |
 
 > [!IMPORTANT]
 > Nunca commite o arquivo `.env` nem cole sua chave em outro arquivo do
@@ -135,6 +178,41 @@ cp .env.example .env
 > `git status` antes de qualquer commit. Se uma chave for exposta
 > acidentalmente, trate-a como comprometida e gere uma nova no Google AI
 > Studio.
+
+## Persistência no Postgres
+
+O bot compartilha o mesmo Postgres em Docker usado por `price-back`,
+`price-auth` e `price-user` — mas com seu próprio banco (`price_bot_db`),
+sem nenhuma tabela em comum com os outros serviços.
+
+```bash
+cd ../price-back
+docker compose up -d
+```
+
+Isso cria `price_bot_db` (uso normal) e `price_bot_db_test` (testes)
+automaticamente em uma instalação nova, via
+`../price-back/docker/initdb/04-create-bot-db.sql`.
+
+A tabela `scraped_products` (criada por `migrations/0001_init_schema.sql`
+na primeira execução) guarda o dado **bruto**, como o bot o vê — não o
+formato final que o app consome:
+
+| Coluna | Origem |
+| --- | --- |
+| `store_key` / `store_name` | `StoreConfig.key` / `.name` da loja |
+| `product_name` | Nome do produto, exatamente como veio da página (ou da IA) |
+| `price_text` | Preço bruto, ex.: `"R$ 7,79"` |
+| `price` | Mesmo preço convertido para número; `NULL` se não der para converter |
+| `source` | `'extract'` ou `'track'` |
+| `search_term` | Termo buscado (só no fluxo `track`) |
+| `collected_at` | Quando a linha foi salva |
+
+Transformar essas linhas brutas no formato de `markets`/`products`/
+`market_products` do `price-back` (decidir categoria, unidade, e se dois
+nomes de produtos diferentes são o "mesmo" produto) é uma etapa de
+curadoria separada — o bot não tem informação suficiente para decidir
+isso sozinho.
 
 ## Como rodar
 
@@ -167,6 +245,11 @@ atalhos diretos para cada fluxo individual, se preferir:
 | `ruff check .` | Verifica lint |
 | `ruff format .` | Formata o código automaticamente |
 | `mypy src` | Verifica tipos estaticamente |
+
+> [!NOTE]
+> Os testes em `tests/test_db_storage.py` usam o Postgres real
+> (`price_bot_db_test`) e pulam automaticamente (`SKIPPED`) se o
+> `docker compose up -d` do `price-back` não estiver rodando.
 
 ## Adicionando uma nova loja
 

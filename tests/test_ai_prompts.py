@@ -2,7 +2,12 @@ import json
 
 import pytest
 
-from nextprice.ai.prompts import build_prompt, parse_ai_response
+from nextprice.ai.prompts import (
+    CATEGORIES,
+    build_generic_extraction_prompt,
+    build_prompt,
+    parse_ai_response,
+)
 
 
 def test_build_prompt_inclui_loja_termo_e_blocos() -> None:
@@ -29,3 +34,17 @@ def test_parse_ai_response_json_invalido_levanta_value_error() -> None:
 def test_parse_ai_response_nao_lista_levanta_value_error() -> None:
     with pytest.raises(ValueError, match="lista"):
         parse_ai_response(json.dumps({"nome": "Tomate"}))
+
+
+def test_build_generic_extraction_prompt_inclui_loja_categorias_e_blocos() -> None:
+    prompt = build_generic_extraction_prompt("MercadoDesconhecido", ["Arroz 5kg - R$ 23,90"])
+    assert "MercadoDesconhecido" in prompt
+    assert "Arroz 5kg - R$ 23,90" in prompt
+    for categoria in CATEGORIES:
+        assert categoria in prompt
+
+
+def test_build_generic_extraction_prompt_com_lista_vazia_nao_quebra() -> None:
+    prompt = build_generic_extraction_prompt("Loja", [])
+    assert "Loja" in prompt
+    assert "Blocos de Produtos" in prompt

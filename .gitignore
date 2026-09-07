@@ -4,6 +4,9 @@
 # Dados gerados pelos scrapers
 dados_supermercados/
 
+# Logs de execução local
+*.log
+
 # Python
 __pycache__/
 *.pyc

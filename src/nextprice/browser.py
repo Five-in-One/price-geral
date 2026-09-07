@@ -64,6 +64,37 @@ def scrape_listing(page: Page, store: StoreConfig) -> list[dict]:
     return produtos
 
 
+_GENERIC_CARD_SELECTOR = (
+    "div.ng-star-inserted:has-text('R$'), article, .product-item, "
+    "div[class*='product'], li[class*='product']"
+)
+
+
+def collect_listing_text_blocks(page: Page, url: str, max_block_len: int = 300) -> list[str]:
+    """Visits an arbitrary market URL and collects text blocks that look
+    like product cards (contain "R$"), for the admin panel's on-demand
+    collection — no StoreConfig/CSS selectors registered for this site, so
+    this uses the same broad heuristic as search_and_collect_cards and lets
+    the AI sort out what's actually a product.
+    """
+    page.goto(url, timeout=60000)
+    page.wait_for_timeout(4000)
+    scroll_to_load(page, times=3, wheel_amount=1000, wait_ms=1500)
+
+    blocos: list[str] = []
+    elementos = page.locator(_GENERIC_CARD_SELECTOR).all()
+    for el in elementos:
+        try:
+            texto = el.inner_text().strip()
+            if "R$" in texto and 0 < len(texto) < max_block_len and texto not in blocos:
+                blocos.append(texto)
+        except Exception:
+            logger.debug("Falha ao ler um bloco de %s, ignorando.", url, exc_info=True)
+            continue
+
+    return blocos
+
+
 def search_and_collect_cards(page: Page, store: StoreConfig, termo: str) -> list[str]:
     """Abre a busca da loja pelo termo e coleta blocos de texto candidatos a produto.
 
