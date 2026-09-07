@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Price — Painel Administrativo</title>
+<link rel="icon" type="image/svg+xml" href="logo-price.svg" />
+<style>
+  :root {
+    --primary: #2A5CB9;
+    --primary-bg: #E3ECFA;
+    --ink: #1C1C1E;
+    --gray: #636366;
+    --gray-light: #8E8E93;
+    --border: #E5E5EA;
+    --bg: #FAFAFA;
+    --red: #DC2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #fff;
+    color: var(--ink);
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .badge {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  header .badge img { width: 100%; height: 100%; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 800; color: var(--primary); }
+  header span.subtitle { color: var(--gray-light); font-size: 13px; margin-left: 4px; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+  section { margin-bottom: 32px; }
+  section h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--gray-light); font-weight: 700; margin: 0 0 12px;
+  }
+
+  .card {
+    border: 1px solid var(--border); border-radius: 12px; padding: 20px; background: var(--bg);
+  }
+
+  .collect-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 220px; }
+  .field label { font-size: 12px; color: var(--gray); font-weight: 600; }
+  input, select {
+    padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+    font-size: 14px; background: #fff; color: var(--ink);
+  }
+  button {
+    padding: 10px 18px; border-radius: 8px; border: none; background: var(--ink);
+    color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+  button.primary { background: var(--primary); }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .toolbar input, .toolbar select { min-width: 160px; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; color: var(--gray-light);
+    padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--bg);
+  }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;
+  }
+  .pill.seed { background: #EFEFF4; color: var(--gray); }
+  .pill.company { background: #E5F1FC; color: #0C63E4; }
+  .pill.bot { background: var(--primary-bg); color: var(--primary); }
+
+  .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 6px; vertical-align: -2px; }
+
+  #collectStatus { margin-top: 12px; font-size: 13px; }
+  #collectStatus.error { color: var(--red); }
+  #collectStatus.ok { color: var(--primary); }
+
+  .empty { color: var(--gray-light); font-size: 13px; padding: 16px; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="badge"><img src="logo-price.svg" alt="Price" /></div>
+  <h1>Price</h1>
+  <span class="subtitle">Painel Administrativo</span>
+</header>
+
+<main>
+  <section>
+    <h2>Coleta sob demanda</h2>
+    <div class="card">
+      <div class="collect-form">
+        <div class="field">
+          <label for="collectUrl">Link do site do mercado</label>
+          <input id="collectUrl" type="url" placeholder="https://www.mercado-exemplo.com.br" />
+        </div>
+        <div class="field">
+          <label for="collectMarketName">Nome do mercado</label>
+          <input id="collectMarketName" type="text" placeholder="Ex: Mercado Exemplo" />
+        </div>
+        <button class="primary" id="collectBtn" onclick="runCollect()">Coletar com IA</button>
+      </div>
+      <div id="collectStatus"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Mercados cadastrados</h2>
+    <div class="toolbar">
+      <input id="marketSearch" type="text" placeholder="Buscar mercado..." oninput="loadMarkets()" />
+    </div>
+    <table>
+      <thead>
+        <tr><th>Mercado</th><th>Iniciais</th><th>Cores</th><th>Origem</th></tr>
+      </thead>
+      <tbody id="marketsBody"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Produtos cadastrados</h2>
+    <div class="toolbar">
+      <input id="productSearch" type="text" placeholder="Buscar produto..." oninput="loadProducts()" />
+      <select id="categoryFilter" onchange="loadProducts()">
+        <option value="">Todas as categorias</option>
+        <option value="HORTIFRUTI">Hortifruti</option>
+        <option value="GRÃOS">Grãos</option>
+        <option value="LATICÍNIOS">Laticínios</option>
+        <option value="CARNES">Carnes</option>
+        <option value="OUTROS">Outros</option>
+      </select>
+      <select id="sourceFilter" onchange="loadProducts()">
+        <option value="">Todas as origens</option>
+        <option value="seed">Demo</option>
+        <option value="company">Empresa parceira</option>
+        <option value="bot">Bot de coleta</option>
+      </select>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Preço</th><th>Mercado padrão</th><th>Origem</th></tr>
+      </thead>
+      <tbody id="productsBody"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+  const PRICE_BACK_URL = "http://localhost:8080";
+  const COLLECT_API_URL = "http://localhost:8085";
+
+  const sourceLabel = { seed: "Demo", company: "Empresa", bot: "Bot" };
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str ?? "";
+    return div.innerHTML;
+  }
+
+  function formatBRL(value) {
+    return "R$ " + Number(value).toFixed(2).replace(".", ",");
+  }
+
+  async function loadMarkets() {
+    const search = document.getElementById("marketSearch").value.trim();
+    const url = new URL(PRICE_BACK_URL + "/api/markets");
+    url.searchParams.set("all", "true");
+    if (search) url.searchParams.set("search", search);
+
+    const tbody = document.getElementById("marketsBody");
+    try {
+      const res = await fetch(url);
+      const markets = await res.json();
+      if (markets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">Nenhum mercado encontrado.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = markets.map(m => `
+        <tr>
+          <td>${escapeHtml(m.name)}</td>
+          <td>${escapeHtml(m.initials)}</td>
+          <td><span class="swatch" style="background:${m.primary_color}"></span>${escapeHtml(m.primary_color)}</td>
+          <td><span class="pill ${m.source}">${sourceLabel[m.source] ?? m.source}</span></td>
+        </tr>
+      `).join("");
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">Não foi possível carregar os mercados (price-back está rodando?).</td></tr>';
+    }
+  }
+
+  async function loadProducts() {
+    const search = document.getElementById("productSearch").value.trim();
+    const category = document.getElementById("categoryFilter").value;
+    const source = document.getElementById("sourceFilter").value;
+
+    const url = new URL(PRICE_BACK_URL + "/api/products");
+    if (search) url.searchParams.set("search", search);
+    if (category) url.searchParams.set("category", category);
+    if (source) url.searchParams.set("source", source);
+
+    const tbody = document.getElementById("productsBody");
+    try {
+      const res = await fetch(url);
+      const products = await res.json();
+      if (products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum produto encontrado.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = products.map(p => `
+        <tr>
+          <td>${escapeHtml(p.name)}</td>
+          <td>${escapeHtml(p.category)}</td>
+          <td>${escapeHtml(p.unit)}</td>
+          <td>${formatBRL(p.default_price)}</td>
+          <td>${escapeHtml(p.default_market_name)}</td>
+          <td><span class="pill ${p.source}">${sourceLabel[p.source] ?? p.source}</span></td>
+        </tr>
+      `).join("");
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Não foi possível carregar os produtos (price-back está rodando?).</td></tr>';
+    }
+  }
+
+  async function runCollect() {
+    const url = document.getElementById("collectUrl").value.trim();
+    const marketName = document.getElementById("collectMarketName").value.trim();
+    const statusEl = document.getElementById("collectStatus");
+    const btn = document.getElementById("collectBtn");
+
+    statusEl.className = "";
+    if (!url || !marketName) {
+      statusEl.className = "error";
+      statusEl.textContent = "Informe o link do site e o nome do mercado.";
+      return;
+    }
+
+    btn.disabled = true;
+    statusEl.textContent = "Acessando o site e interpretando os produtos com IA... isso pode levar até 1 minuto.";
+
+    try {
+      const res = await fetch(COLLECT_API_URL + "/collect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, market_name: marketName }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.className = "error";
+        statusEl.textContent = "Erro: " + (data.detail || res.statusText);
+        return;
+      }
+      statusEl.className = "ok";
+      statusEl.textContent =
+        `Encontrados ${data.blocks_found} blocos, ${data.products_extracted} produtos reconhecidos pela IA, ` +
+        `${data.products_inserted} adicionados à tabela.`;
+      loadProducts();
+      loadMarkets();
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = "Não foi possível falar com o serviço de coleta (price-bot está rodando na porta 8085?).";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  loadMarkets();
+  loadProducts();
+</script>
+
+</body>
+</html>
