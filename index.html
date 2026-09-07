@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Price — Página da Empresa</title>
+<link rel="icon" type="image/svg+xml" href="logo-price.svg" />
+<style>
+  :root {
+    --primary: #2A5CB9;
+    --primary-bg: #E3ECFA;
+    --ink: #1C1C1E;
+    --gray: #636366;
+    --gray-light: #8E8E93;
+    --border: #E5E5EA;
+    --bg: #FAFAFA;
+    --red: #DC2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #fff;
+    color: var(--ink);
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header .badge {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  header .badge img { width: 100%; height: 100%; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 800; color: var(--primary); }
+  header span.subtitle { color: var(--gray-light); font-size: 13px; margin-left: 4px; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 24px; }
+
+  h2.title { font-size: 24px; font-weight: 900; margin: 8px 0 4px; }
+  p.lead { color: var(--gray); font-size: 14px; margin: 0 0 24px; line-height: 1.5; }
+
+  .card { border: 1px solid var(--border); border-radius: 14px; padding: 22px; background: var(--bg); }
+
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+  .field label { font-size: 12px; color: var(--gray); font-weight: 600; }
+  input, select {
+    padding: 11px 12px; border-radius: 8px; border: 1px solid var(--border);
+    font-size: 14px; background: #fff; color: var(--ink); width: 100%;
+  }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+
+  button {
+    width: 100%; padding: 14px; border-radius: 10px; border: none; background: var(--primary);
+    color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; margin-top: 4px;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  #status { margin-top: 14px; font-size: 13px; text-align: center; }
+  #status.error { color: var(--red); }
+  #status.ok { color: var(--primary); font-weight: 600; }
+
+  section.recent { margin-top: 36px; }
+  section.recent h3 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--gray-light); font-weight: 700; margin: 0 0 12px;
+  }
+  .product-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px;
+    font-size: 13px;
+  }
+  .product-row .name { font-weight: 700; }
+  .product-row .meta { color: var(--gray-light); font-size: 11px; }
+  .product-row .price { font-weight: 900; color: var(--primary); }
+  .empty { color: var(--gray-light); font-size: 13px; text-align: center; padding: 12px; }
+
+  datalist {}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="badge"><img src="logo-price.svg" alt="Price" /></div>
+  <h1>Price</h1>
+  <span class="subtitle">Página da Empresa</span>
+</header>
+
+<main>
+  <h2 class="title">Cadastre seus produtos</h2>
+  <p class="lead">
+    Preencha o nome do seu mercado e os produtos que você quer que apareçam
+    no app do Price, junto com os produtos coletados automaticamente.
+  </p>
+
+  <div class="card">
+    <div class="field">
+      <label for="marketName">Nome do seu mercado</label>
+      <input id="marketName" list="marketOptions" placeholder="Ex: Mercadinho da Esquina" />
+      <datalist id="marketOptions"></datalist>
+    </div>
+
+    <div class="field">
+      <label for="productName">Nome do produto</label>
+      <input id="productName" placeholder="Ex: Tomate" />
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="category">Categoria</label>
+        <select id="category">
+          <option value="HORTIFRUTI">Hortifruti</option>
+          <option value="GRÃOS">Grãos</option>
+          <option value="LATICÍNIOS">Laticínios</option>
+          <option value="CARNES">Carnes</option>
+          <option value="OUTROS">Outros</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="unit">Unidade</label>
+        <select id="unit">
+          <option value="kg">kg</option>
+          <option value="un">un</option>
+          <option value="pct">pct</option>
+          <option value="L">L</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="price">Preço (R$)</label>
+      <input id="price" type="number" min="0.01" step="0.01" placeholder="Ex: 4.99" />
+    </div>
+
+    <button onclick="submitProduct()" id="submitBtn">Cadastrar produto</button>
+    <div id="status"></div>
+  </div>
+
+  <section class="recent">
+    <h3>Meus produtos cadastrados recentemente</h3>
+    <div id="recentList"></div>
+  </section>
+</main>
+
+<script>
+  const PRICE_BACK_URL = "http://localhost:8080";
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str ?? "";
+    return div.innerHTML;
+  }
+
+  function formatBRL(value) {
+    return "R$ " + Number(value).toFixed(2).replace(".", ",");
+  }
+
+  async function loadMarketOptions() {
+    try {
+      const res = await fetch(PRICE_BACK_URL + "/api/markets?all=true");
+      const markets = await res.json();
+      const datalist = document.getElementById("marketOptions");
+      datalist.innerHTML = markets.map(m => `<option value="${escapeHtml(m.name)}">`).join("");
+    } catch (e) {
+      // Silent: autocomplete is a nicety, not required to submit.
+    }
+  }
+
+  async function loadRecentProducts() {
+    const list = document.getElementById("recentList");
+    try {
+      const res = await fetch(PRICE_BACK_URL + "/api/products?source=company");
+      const products = await res.json();
+      if (products.length === 0) {
+        list.innerHTML = '<div class="empty">Nenhum produto cadastrado ainda.</div>';
+        return;
+      }
+      list.innerHTML = products.slice(0, 10).map(p => `
+        <div class="product-row">
+          <div>
+            <div class="name">${escapeHtml(p.name)}</div>
+            <div class="meta">${escapeHtml(p.default_market_name)} · ${escapeHtml(p.category)}</div>
+          </div>
+          <div class="price">${formatBRL(p.default_price)}</div>
+        </div>
+      `).join("");
+    } catch (e) {
+      list.innerHTML = '<div class="empty">Não foi possível carregar (price-back está rodando?).</div>';
+    }
+  }
+
+  async function submitProduct() {
+    const marketName = document.getElementById("marketName").value.trim();
+    const productName = document.getElementById("productName").value.trim();
+    const category = document.getElementById("category").value;
+    const unit = document.getElementById("unit").value;
+    const price = parseFloat(document.getElementById("price").value);
+    const statusEl = document.getElementById("status");
+    const btn = document.getElementById("submitBtn");
+
+    statusEl.className = "";
+    if (!marketName || !productName || !price || price <= 0) {
+      statusEl.className = "error";
+      statusEl.textContent = "Preencha mercado, produto e um preço válido.";
+      return;
+    }
+
+    btn.disabled = true;
+    statusEl.textContent = "Salvando...";
+
+    try {
+      const res = await fetch(PRICE_BACK_URL + "/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: productName,
+          unit,
+          category,
+          price,
+          market_name: marketName,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.className = "error";
+        statusEl.textContent = "Erro: " + (data.error || res.statusText);
+        return;
+      }
+      statusEl.className = "ok";
+      statusEl.textContent = `"${data.name}" cadastrado em ${data.default_market_name}!`;
+      document.getElementById("productName").value = "";
+      document.getElementById("price").value = "";
+      loadRecentProducts();
+      loadMarketOptions();
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = "Não foi possível falar com o servidor (price-back está rodando na porta 8080?).";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  loadMarketOptions();
+  loadRecentProducts();
+</script>
+
+</body>
+</html>
