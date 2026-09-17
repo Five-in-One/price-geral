@@ -20,6 +20,8 @@ func productsRouter(pool *pgxpool.Pool) chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", listProductsHandler(productsRepo))
 	r.Post("/", createProductHandler(productsRepo, marketsRepo))
+	r.Patch("/{id}", updateProductHandler(productsRepo))
+	r.Delete("/{id}", deleteProductHandler(productsRepo))
 	return r
 }
 
@@ -31,6 +33,7 @@ func listProductsHandler(repo *repository.ProductsRepo) http.HandlerFunc {
 			Category:       q.Get("category"),
 			Search:         q.Get("search"),
 			Source:         q.Get("source"),
+			MarketID:       q.Get("market_id"),
 			SortByPriceAsc: q.Get("sort") == "price_asc",
 		}
 
@@ -130,5 +133,87 @@ func createProductHandler(productsRepo *repository.ProductsRepo, marketsRepo *re
 		}
 
 		writeJSON(w, http.StatusCreated, product)
+	}
+}
+
+type updateProductRequest struct {
+	Name     *string  `json:"name"`
+	Unit     *string  `json:"unit"`
+	Category *string  `json:"category"`
+	Price    *float64 `json:"price"`
+}
+
+func updateProductHandler(repo *repository.ProductsRepo) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		id := chi.URLParam(req, "id")
+
+		var body updateProductRequest
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+			return
+		}
+
+		if body.Name != nil {
+			trimmed := strings.TrimSpace(*body.Name)
+			if trimmed == "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name cannot be empty"})
+				return
+			}
+			body.Name = &trimmed
+		}
+		if body.Unit != nil {
+			trimmed := strings.TrimSpace(*body.Unit)
+			if trimmed == "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unit cannot be empty"})
+				return
+			}
+			body.Unit = &trimmed
+		}
+		if body.Category != nil {
+			trimmed := strings.TrimSpace(*body.Category)
+			if trimmed == "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "category cannot be empty"})
+				return
+			}
+			body.Category = &trimmed
+		}
+		if body.Price != nil && *body.Price <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "price must be greater than zero"})
+			return
+		}
+
+		product, err := repo.Update(req.Context(), id, repository.UpdateProductInput{
+			Name:     body.Name,
+			Unit:     body.Unit,
+			Category: body.Category,
+			Price:    body.Price,
+		})
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "product not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update product"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, product)
+	}
+}
+
+func deleteProductHandler(repo *repository.ProductsRepo) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		id := chi.URLParam(req, "id")
+
+		if err := repo.Delete(req.Context(), id); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "product not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete product"})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

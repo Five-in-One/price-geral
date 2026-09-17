@@ -44,7 +44,9 @@ para o estado seedado antes de cada teste.
 | GET | `/health` | healthcheck |
 | GET | `/api/markets?lat=&lng=&radius_km=` | mercados dentro do raio (padrão 5km), ordenados por distância |
 | GET | `/api/markets?all=true&search=` | todos os mercados (ignora raio), com busca por nome — usado pelo Painel Admin |
-| POST | `/api/markets` | cria um mercado (ou reaproveita um já existente com o mesmo nome) — `{name, latitude?, longitude?, initials?, primary_color?, background_color?, source?}` |
+| POST | `/api/markets` | cria um mercado (ou reaproveita um já existente com o mesmo nome) — `{name, latitude?, longitude?, initials?, primary_color?, background_color?, source?, link?, cep?, street?, number?, neighborhood?, city?, state?, complement?}`. Campos de endereço se mesclam num resubmit pelo mesmo nome: um valor não-vazio substitui o antigo, um vazio nunca apaga o que já estava salvo. `link` (uma URL por vez) se acumula em `links` — o mesmo mercado pode ter mais de um site (a lista retornada nunca duplica a mesma URL); a identidade do mercado continua sendo o nome, nunca a URL |
+| POST | `/api/markets/{id}/links` | adiciona um link ao mercado — `{url}`. Idempotente (resubmeter a mesma URL não duplica) |
+| DELETE | `/api/markets/{id}/links?url=` | remove um link do mercado (comparação sem diferenciar maiúsculas/minúsculas) |
 | GET | `/api/products?category=&search=&sort=price_asc&source=` | busca/filtra produtos (filtro `source`: `seed`\|`company`\|`bot`) |
 | POST | `/api/products` | cria/atualiza um produto e seu preço em um mercado — `{name, unit, category, price, market_id\|market_name, source?}` |
 | POST | `/api/comparisons` | compara o custo de uma lista `{items:[{product_id,quantity}]}` entre todos os mercados |

@@ -174,3 +174,207 @@ func TestCreateMarket_BotSource_IsAccepted(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &market))
 	require.Equal(t, "bot", market.Source)
 }
+
+func TestCreateMarket_WithAddress_StoresAddressFields(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := postJSON(t, router, "/api/markets", map[string]string{
+		"name":   "Mercado Endereçado",
+		"source": "bot",
+		"link":   "https://www.mercado-enderecado.com.br",
+		"cep":    "64000-000",
+		"street": "Rua Principal",
+		"number": "123",
+		"city":   "Teresina",
+		"state":  "PI",
+	})
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	var market models.Market
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &market))
+	require.Equal(t, []string{"https://www.mercado-enderecado.com.br"}, market.Links)
+	require.Equal(t, "64000-000", market.CEP)
+	require.Equal(t, "Rua Principal", market.Street)
+	require.Equal(t, "123", market.Number)
+	require.Equal(t, "Teresina", market.City)
+	require.Equal(t, "PI", market.State)
+}
+
+func TestCreateMarket_SameNameDifferentLink_AccumulatesLinks(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	first := postJSON(t, router, "/api/markets", map[string]string{
+		"name": "Rede Multi Loja", "source": "bot", "link": "https://www.loja1.com.br",
+	})
+	require.Equal(t, http.StatusCreated, first.Code)
+
+	second := postJSON(t, router, "/api/markets", map[string]string{
+		"name": "Rede Multi Loja", "source": "bot", "link": "https://www.loja2.com.br",
+	})
+	require.Equal(t, http.StatusCreated, second.Code)
+
+	// Resubmitting the exact same link a second time must not duplicate it.
+	third := postJSON(t, router, "/api/markets", map[string]string{
+		"name": "Rede Multi Loja", "source": "bot", "link": "https://www.loja2.com.br",
+	})
+	require.Equal(t, http.StatusCreated, third.Code)
+
+	var market models.Market
+	require.NoError(t, json.Unmarshal(third.Body.Bytes(), &market))
+	require.Equal(t, []string{"https://www.loja1.com.br", "https://www.loja2.com.br"}, market.Links)
+}
+
+func TestCreateMarket_SameNameTwice_MergesAddressWithoutBlankingIt(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	first := postJSON(t, router, "/api/markets", map[string]string{
+		"name": "Mercado Progressivo", "source": "bot", "cep": "64000-000", "city": "Teresina",
+	})
+	require.Equal(t, http.StatusCreated, first.Code)
+
+	// Resubmitting with a blank cep/city (e.g. the admin only had the URL
+	// this time) must not erase what was already stored.
+	second := postJSON(t, router, "/api/markets", map[string]string{
+		"name": "Mercado Progressivo", "source": "bot", "link": "https://www.progressivo.com.br",
+	})
+	require.Equal(t, http.StatusCreated, second.Code)
+
+	var market models.Market
+	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &market))
+	require.Equal(t, []string{"https://www.progressivo.com.br"}, market.Links)
+	require.Equal(t, "64000-000", market.CEP, "earlier cep must survive a resubmit that omits it")
+	require.Equal(t, "Teresina", market.City, "earlier city must survive a resubmit that omits it")
+}
+
+func TestAddMarketLink_AppendsToList(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := postJSON(t, router, "/api/markets/af/links", map[string]string{"url": "https://www.af.com.br"})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var market models.Market
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &market))
+	require.Equal(t, []string{"https://www.af.com.br"}, market.Links)
+}
+
+func TestAddMarketLink_SameURLTwice_DoesNotDuplicate(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	postJSON(t, router, "/api/markets/af/links", map[string]string{"url": "https://www.af.com.br"})
+	rec := postJSON(t, router, "/api/markets/af/links", map[string]string{"url": "https://www.af.com.br"})
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var market models.Market
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &market))
+	require.Equal(t, []string{"https://www.af.com.br"}, market.Links)
+}
+
+func TestAddMarketLink_EmptyURL_ReturnsBadRequest(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := postJSON(t, router, "/api/markets/af/links", map[string]string{"url": "  "})
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestAddMarketLink_UnknownMarket_ReturnsNotFound(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := postJSON(t, router, "/api/markets/does-not-exist/links", map[string]string{"url": "https://x.com"})
+	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestRemoveMarketLink_RemovesIt(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	postJSON(t, router, "/api/markets/af/links", map[string]string{"url": "https://www.af.com.br"})
+
+	rec := doRequest(t, router, http.MethodDelete, "/api/markets/af/links?url=https://www.af.com.br")
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var market models.Market
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &market))
+	require.Empty(t, market.Links)
+}
+
+func TestRemoveMarketLink_UnknownMarket_ReturnsNotFound(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := doRequest(t, router, http.MethodDelete, "/api/markets/does-not-exist/links?url=https://x.com")
+	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestRemoveMarketLink_MissingURLParam_ReturnsBadRequest(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := doRequest(t, router, http.MethodDelete, "/api/markets/af/links")
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestUpdateMarket_ChangesNameAndColors(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := patchJSON(t, router, "/api/markets/af", map[string]any{
+		"name": "Atacado Família Ltda", "primary_color": "#000000", "background_color": "#FFFFFF",
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var market models.Market
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &market))
+	require.Equal(t, "Atacado Família Ltda", market.Name)
+	require.Equal(t, "#000000", market.PrimaryColor)
+	require.Equal(t, "#FFFFFF", market.BackgroundColor)
+	require.Equal(t, "AF", market.Initials, "initials untouched when not provided")
+}
+
+func TestUpdateMarket_EmptyName_ReturnsBadRequest(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := patchJSON(t, router, "/api/markets/af", map[string]any{"name": "   "})
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestUpdateMarket_UnknownID_ReturnsNotFound(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := patchJSON(t, router, "/api/markets/does-not-exist", map[string]any{"name": "X"})
+	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestDeleteMarket_RemovesItAndItsProducts(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := doRequest(t, router, http.MethodDelete, "/api/markets/af")
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	marketsRec := doRequest(t, router, http.MethodGet, "/api/markets?all=true")
+	var markets []models.MarketWithDistance
+	require.NoError(t, json.Unmarshal(marketsRec.Body.Bytes(), &markets))
+	require.Len(t, markets, 4)
+
+	productsRec := doRequest(t, router, http.MethodGet, "/api/products?market_id=af")
+	var products []models.Product
+	require.NoError(t, json.Unmarshal(productsRec.Body.Bytes(), &products))
+	require.Empty(t, products, "products whose default market was deleted should go with it")
+}
+
+func TestDeleteMarket_UnknownID_ReturnsNotFound(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := doRequest(t, router, http.MethodDelete, "/api/markets/does-not-exist")
+	require.Equal(t, http.StatusNotFound, rec.Code)
+}

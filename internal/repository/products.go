@@ -29,6 +29,7 @@ type ProductFilter struct {
 	Category       string // "" or "Tudo" means no filter
 	Search         string // matched case-insensitively against the product name
 	Source         string // "" means no filter; otherwise "seed", "company" or "bot"
+	MarketID       string // "" means no filter; otherwise the product's default market
 	SortByPriceAsc bool
 }
 
@@ -56,6 +57,10 @@ func (r *ProductsRepo) List(ctx context.Context, filter ProductFilter) ([]models
 	if filter.Source != "" {
 		args = append(args, filter.Source)
 		query += fmt.Sprintf(" AND p.source = $%d", len(args))
+	}
+	if filter.MarketID != "" {
+		args = append(args, filter.MarketID)
+		query += fmt.Sprintf(" AND p.default_market_id = $%d", len(args))
 	}
 
 	if filter.SortByPriceAsc {
@@ -150,4 +155,65 @@ func (r *ProductsRepo) UpsertForMarket(ctx context.Context, input CreateProductI
 	}
 
 	return r.GetByID(ctx, productID)
+}
+
+// UpdateProductInput describes fields to change on an existing product.
+// Pointer fields distinguish "not provided" from a zero value, so a PATCH
+// can touch just one field (e.g. only the price) without clobbering the
+// others. Reassigning a product's market isn't supported here — that's a
+// bigger structural change than an edit form should trigger.
+type UpdateProductInput struct {
+	Name     *string
+	Unit     *string
+	Category *string
+	Price    *float64
+}
+
+// Update applies the given fields to a product (and its default market's
+// price, if Price is set), returning ErrNotFound if no product has id.
+func (r *ProductsRepo) Update(ctx context.Context, id string, input UpdateProductInput) (models.Product, error) {
+	current, err := r.GetByID(ctx, id)
+	if err != nil {
+		return models.Product{}, err
+	}
+
+	name, unit, category := current.Name, current.Unit, current.Category
+	if input.Name != nil {
+		name = *input.Name
+	}
+	if input.Unit != nil {
+		unit = *input.Unit
+	}
+	if input.Category != nil {
+		category = *input.Category
+	}
+
+	if _, err := r.pool.Exec(ctx, `
+		UPDATE products SET name = $1, unit = $2, category = $3 WHERE id = $4
+	`, name, unit, category, id); err != nil {
+		return models.Product{}, err
+	}
+
+	if input.Price != nil {
+		if _, err := r.pool.Exec(ctx, `
+			UPDATE market_products SET price = $1 WHERE product_id = $2
+		`, *input.Price, id); err != nil {
+			return models.Product{}, err
+		}
+	}
+
+	return r.GetByID(ctx, id)
+}
+
+// Delete removes a product — its price rows in market_products go with it
+// via ON DELETE CASCADE — returning ErrNotFound if no product has id.
+func (r *ProductsRepo) Delete(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM products WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

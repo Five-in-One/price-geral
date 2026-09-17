@@ -1,6 +1,7 @@
 package httpserver_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -245,4 +246,107 @@ func doRequest(t *testing.T, router http.Handler, method, path string) *httptest
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	return rec
+}
+
+func patchJSON(t *testing.T, router http.Handler, path string, body any) *httptest.ResponseRecorder {
+	t.Helper()
+	payload, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPatch, path, bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestListProducts_MarketFilter(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := doRequest(t, router, http.MethodGet, "/api/products?market_id=af")
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var products []models.Product
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &products))
+	require.Len(t, products, 7)
+	for _, p := range products {
+		require.Equal(t, "Atacado Família", p.DefaultMarketName)
+	}
+}
+
+func TestUpdateProduct_ChangesNameUnitCategoryAndPrice(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := patchJSON(t, router, "/api/products/p1", map[string]any{
+		"name": "Banana Nanica", "unit": "un", "category": "OUTROS", "price": 5.50,
+	})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var product models.Product
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &product))
+	require.Equal(t, "Banana Nanica", product.Name)
+	require.Equal(t, "un", product.Unit)
+	require.Equal(t, "OUTROS", product.Category)
+	require.InDelta(t, 5.50, product.DefaultPrice, 0.001)
+}
+
+func TestUpdateProduct_PartialBody_KeepsOtherFields(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := patchJSON(t, router, "/api/products/p1", map[string]any{"price": 9.99})
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var product models.Product
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &product))
+	require.Equal(t, "Banana prata", product.Name)
+	require.Equal(t, "kg", product.Unit)
+	require.InDelta(t, 9.99, product.DefaultPrice, 0.001)
+}
+
+func TestUpdateProduct_EmptyName_ReturnsBadRequest(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := patchJSON(t, router, "/api/products/p1", map[string]any{"name": "   "})
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestUpdateProduct_NonPositivePrice_ReturnsBadRequest(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := patchJSON(t, router, "/api/products/p1", map[string]any{"price": 0})
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestUpdateProduct_UnknownID_ReturnsNotFound(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := patchJSON(t, router, "/api/products/does-not-exist", map[string]any{"price": 1.0})
+	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestDeleteProduct_RemovesItFromListing(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := doRequest(t, router, http.MethodDelete, "/api/products/p1")
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	listRec := doRequest(t, router, http.MethodGet, "/api/products?search=banana%20prata")
+	var products []models.Product
+	require.NoError(t, json.Unmarshal(listRec.Body.Bytes(), &products))
+	require.Empty(t, products)
+}
+
+func TestDeleteProduct_UnknownID_ReturnsNotFound(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	rec := doRequest(t, router, http.MethodDelete, "/api/products/does-not-exist")
+	require.Equal(t, http.StatusNotFound, rec.Code)
 }

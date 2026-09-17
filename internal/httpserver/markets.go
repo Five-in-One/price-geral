@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 	"strconv"
@@ -27,6 +28,10 @@ func marketsRouter(pool *pgxpool.Pool) chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", listMarketsHandler(repo))
 	r.Post("/", createMarketHandler(repo))
+	r.Patch("/{id}", updateMarketHandler(repo))
+	r.Delete("/{id}", deleteMarketHandler(repo))
+	r.Post("/{id}/links", addMarketLinkHandler(repo))
+	r.Delete("/{id}/links", removeMarketLinkHandler(repo))
 	return r
 }
 
@@ -92,6 +97,14 @@ type createMarketRequest struct {
 	PrimaryColor    string   `json:"primary_color"`
 	BackgroundColor string   `json:"background_color"`
 	Source          string   `json:"source"`
+	Link            string   `json:"link"`
+	CEP             string   `json:"cep"`
+	Street          string   `json:"street"`
+	Number          string   `json:"number"`
+	Neighborhood    string   `json:"neighborhood"`
+	City            string   `json:"city"`
+	State           string   `json:"state"`
+	Complement      string   `json:"complement"`
 }
 
 func createMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
@@ -143,6 +156,14 @@ func createMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 			PrimaryColor:    primary,
 			BackgroundColor: background,
 			Source:          source,
+			Link:            strings.TrimSpace(body.Link),
+			CEP:             strings.TrimSpace(body.CEP),
+			Street:          strings.TrimSpace(body.Street),
+			Number:          strings.TrimSpace(body.Number),
+			Neighborhood:    strings.TrimSpace(body.Neighborhood),
+			City:            strings.TrimSpace(body.City),
+			State:           strings.TrimSpace(body.State),
+			Complement:      strings.TrimSpace(body.Complement),
 		})
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create market"})
@@ -150,6 +171,125 @@ func createMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusCreated, market)
+	}
+}
+
+type updateMarketRequest struct {
+	Name            *string `json:"name"`
+	Initials        *string `json:"initials"`
+	PrimaryColor    *string `json:"primary_color"`
+	BackgroundColor *string `json:"background_color"`
+}
+
+func updateMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		id := chi.URLParam(req, "id")
+
+		var body updateMarketRequest
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+			return
+		}
+
+		if body.Name != nil {
+			trimmed := strings.TrimSpace(*body.Name)
+			if trimmed == "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name cannot be empty"})
+				return
+			}
+			body.Name = &trimmed
+		}
+
+		market, err := repo.Update(req.Context(), id, repository.UpdateMarketInput{
+			Name:            body.Name,
+			Initials:        body.Initials,
+			PrimaryColor:    body.PrimaryColor,
+			BackgroundColor: body.BackgroundColor,
+		})
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "market not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update market"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, market)
+	}
+}
+
+func deleteMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		id := chi.URLParam(req, "id")
+
+		if err := repo.Delete(req.Context(), id); err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "market not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete market"})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+type addMarketLinkRequest struct {
+	URL string `json:"url"`
+}
+
+func addMarketLinkHandler(repo *repository.MarketsRepo) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		id := chi.URLParam(req, "id")
+
+		var body addMarketLinkRequest
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+			return
+		}
+
+		url := strings.TrimSpace(body.URL)
+		if url == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url is required"})
+			return
+		}
+
+		market, err := repo.AddLink(req.Context(), id, url)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "market not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to add link"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, market)
+	}
+}
+
+func removeMarketLinkHandler(repo *repository.MarketsRepo) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		id := chi.URLParam(req, "id")
+		url := strings.TrimSpace(req.URL.Query().Get("url"))
+		if url == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url query param is required"})
+			return
+		}
+
+		market, err := repo.RemoveLink(req.Context(), id, url)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "market not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to remove link"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, market)
 	}
 }
 
