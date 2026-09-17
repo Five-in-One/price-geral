@@ -58,7 +58,40 @@
   }
 
   .collect-form, .user-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .collect-form { margin-bottom: 12px; }
   .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 220px; }
+  .field.small { flex: 0 0 120px; min-width: 100px; }
+  .field.medium { flex: 1 1 160px; min-width: 140px; }
+  #cepStatus { font-size: 12px; margin-top: 2px; }
+  #cepStatus.error { color: var(--red); }
+  #cepStatus.ok { color: var(--primary); }
+
+  #reloadStatus { margin: -4px 0 12px; font-size: 13px; }
+  #reloadStatus.error { color: var(--red); }
+  #reloadStatus.ok { color: var(--primary); }
+
+  .links-cell { max-width: 220px; }
+  .links-cell .link-line { display: block; font-size: 12px; color: var(--gray); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .muted-note { color: var(--gray-light); font-style: italic; font-size: 12px; }
+  .row-actions button.reload { background: var(--primary-bg); color: var(--primary); }
+
+  .edit-links-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .edit-links-row span { flex: 1; font-size: 12px; color: var(--gray); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .edit-links-add { display: flex; gap: 6px; margin-top: 6px; }
+  .edit-links-add input { flex: 1; }
+
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; padding: 0; flex: 0 0 auto;
+    border-radius: 6px; background: #fff; border: 1px solid var(--border);
+    color: var(--gray); cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--bg); }
+  .icon-btn.danger { color: var(--red); }
+  .icon-btn.confirm { color: #fff; background: var(--red); border-color: var(--red); }
+  .icon-btn.cancel { color: var(--gray); }
+  #editLinksStatus { font-size: 12px; margin-top: 4px; }
+  #editLinksStatus.error { color: var(--red); }
   .field label { font-size: 12px; color: var(--gray); font-weight: 600; }
   input, select {
     padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
@@ -70,6 +103,7 @@
   }
   button.primary { background: var(--primary); }
   button.ghost { background: transparent; color: var(--gray); border: 1px solid var(--border); }
+  button.danger { background: var(--red); }
   button:disabled { opacity: 0.5; cursor: default; }
 
   .toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -97,6 +131,26 @@
   #collectStatus.ok, #userStatus.ok { color: var(--primary); }
 
   .empty { color: var(--gray-light); font-size: 13px; padding: 16px; text-align: center; }
+
+  .row-actions { display: flex; gap: 6px; white-space: nowrap; }
+  .row-actions button {
+    padding: 5px 10px; font-size: 12px; font-weight: 600; border-radius: 6px;
+  }
+  .row-actions button.edit { background: var(--primary-bg); color: var(--primary); }
+  .row-actions button.delete { background: #FDE8E8; color: var(--red); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(28,28,30,0.45);
+    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 100;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal { width: 100%; max-width: 380px; background: #fff; }
+  .modal h3 { margin: 0 0 16px; font-size: 16px; }
+  .modal .field { margin-bottom: 12px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+  #editStatus, #confirmStatus { margin-top: 10px; font-size: 13px; }
+  #editStatus.error, #confirmStatus.error { color: var(--red); }
+  #confirmMessage { font-size: 14px; color: var(--gray); margin: 0; }
 
   /* Login screen — split layout: illustration left, form right */
   #loginScreen { display: flex; min-height: 100vh; }
@@ -245,8 +299,35 @@
           <label for="collectMarketName">Nome do mercado</label>
           <input id="collectMarketName" type="text" placeholder="Ex: Mercado Exemplo" />
         </div>
+      </div>
+      <div class="collect-form">
+        <div class="field small">
+          <label for="collectCep">CEP</label>
+          <input id="collectCep" type="text" placeholder="64000-000" maxlength="9" oninput="handleCepInput(this)" />
+        </div>
+        <div class="field medium">
+          <label for="collectStreet">Logradouro</label>
+          <input id="collectStreet" type="text" placeholder="Rua / Av." />
+        </div>
+        <div class="field small">
+          <label for="collectNumber">Número</label>
+          <input id="collectNumber" type="text" placeholder="123" />
+        </div>
+        <div class="field medium">
+          <label for="collectNeighborhood">Bairro</label>
+          <input id="collectNeighborhood" type="text" placeholder="Bairro" />
+        </div>
+        <div class="field medium">
+          <label for="collectCity">Cidade</label>
+          <input id="collectCity" type="text" placeholder="Cidade" />
+        </div>
+        <div class="field small">
+          <label for="collectState">UF</label>
+          <input id="collectState" type="text" placeholder="PI" maxlength="2" style="text-transform: uppercase;" />
+        </div>
         <button class="primary" id="collectBtn" onclick="runCollect()">Coletar com IA</button>
       </div>
+      <div id="cepStatus"></div>
       <div id="collectStatus"></div>
     </div>
   </section>
@@ -286,9 +367,10 @@
     <div class="toolbar">
       <input id="marketSearch" type="text" placeholder="Buscar mercado..." oninput="loadMarkets()" />
     </div>
+    <div id="reloadStatus"></div>
     <table>
       <thead>
-        <tr><th>Mercado</th><th>Iniciais</th><th>Cores</th><th>Origem</th></tr>
+        <tr><th>Mercado</th><th>Iniciais</th><th>Cores</th><th>Links</th><th>Origem</th><th>Ações</th></tr>
       </thead>
       <tbody id="marketsBody"></tbody>
     </table>
@@ -298,6 +380,9 @@
     <h2>Produtos cadastrados</h2>
     <div class="toolbar">
       <input id="productSearch" type="text" placeholder="Buscar produto..." oninput="loadProducts()" />
+      <select id="marketFilter" onchange="loadProducts()">
+        <option value="">Todos os mercados</option>
+      </select>
       <select id="categoryFilter" onchange="loadProducts()">
         <option value="">Todas as categorias</option>
         <option value="HORTIFRUTI">Hortifruti</option>
@@ -315,12 +400,36 @@
     </div>
     <table>
       <thead>
-        <tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Preço</th><th>Mercado padrão</th><th>Origem</th></tr>
+        <tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Preço</th><th>Mercado padrão</th><th>Origem</th><th>Ações</th></tr>
       </thead>
       <tbody id="productsBody"></tbody>
     </table>
   </section>
 </main>
+
+<div class="modal-overlay" id="editOverlay" hidden>
+  <div class="modal card">
+    <h3 id="editTitle">Editar</h3>
+    <div id="editFields"></div>
+    <div id="editStatus"></div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeEdit()">Cancelar</button>
+      <button class="primary" id="editSaveBtn" onclick="saveEdit()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="confirmOverlay" hidden>
+  <div class="modal card">
+    <h3>Confirmar exclusão</h3>
+    <p id="confirmMessage"></p>
+    <div id="confirmStatus"></div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeConfirm()">Cancelar</button>
+      <button class="danger" id="confirmDeleteBtn" onclick="runConfirmedDelete()">Excluir</button>
+    </div>
+  </div>
+</div>
 
 <script>
   const PRICE_BACK_URL = "http://localhost:8080";
@@ -491,6 +600,17 @@
 
   // --- Data tables ----------------------------------------------------------
 
+  let lastMarkets = [];
+  let lastProducts = [];
+
+  function populateMarketFilter(markets) {
+    const select = document.getElementById("marketFilter");
+    const current = select.value;
+    select.innerHTML = '<option value="">Todos os mercados</option>' +
+      markets.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join("");
+    if (markets.some(m => m.id === current)) select.value = current;
+  }
+
   async function loadMarkets() {
     const search = document.getElementById("marketSearch").value.trim();
     const url = new URL(PRICE_BACK_URL + "/api/markets");
@@ -501,8 +621,10 @@
     try {
       const res = await fetch(url);
       const markets = await res.json();
+      lastMarkets = markets;
+      populateMarketFilter(markets);
       if (markets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty">Nenhum mercado encontrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum mercado encontrado.</td></tr>';
         return;
       }
       tbody.innerHTML = markets.map(m => `
@@ -510,21 +632,84 @@
           <td>${escapeHtml(m.name)}</td>
           <td>${escapeHtml(m.initials)}</td>
           <td><span class="swatch" style="background:${m.primary_color}"></span>${escapeHtml(m.primary_color)}</td>
+          <td class="links-cell">${
+            (m.links && m.links.length > 0)
+              ? m.links.map(l => `<span class="link-line" title="${escapeHtml(l)}">${escapeHtml(l)}</span>`).join("")
+              : '<span class="muted-note">sem link</span>'
+          }</td>
           <td><span class="pill ${m.source}">${sourceLabel[m.source] ?? m.source}</span></td>
+          <td class="row-actions">
+            <button class="reload" onclick="reloadMarket('${m.id}')" ${(!m.links || m.links.length === 0) ? "disabled" : ""}>Recarregar</button>
+            <button class="edit" onclick="openEditMarket('${m.id}')">Editar</button>
+            <button class="delete" onclick="deleteMarket('${m.id}')">Excluir</button>
+          </td>
         </tr>
       `).join("");
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty">Não foi possível carregar os mercados (price-back está rodando?).</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Não foi possível carregar os mercados (price-back está rodando?).</td></tr>';
     }
+  }
+
+  // --- Recarregar (re-coleta os links já cadastrados de um mercado) ---------
+
+  async function reloadMarket(id) {
+    const market = lastMarkets.find(m => m.id === id);
+    const statusEl = document.getElementById("reloadStatus");
+    if (!market) return;
+
+    const links = market.links || [];
+    if (links.length === 0) {
+      statusEl.className = "error";
+      statusEl.textContent = `"${market.name}" não tem links cadastrados para recarregar.`;
+      return;
+    }
+
+    const buttons = document.querySelectorAll(`button.reload`);
+    buttons.forEach(b => b.disabled = true);
+
+    let totalInserted = 0;
+    let failures = 0;
+
+    for (let i = 0; i < links.length; i++) {
+      statusEl.className = "";
+      statusEl.textContent = `Recarregando "${market.name}" (${i + 1}/${links.length}): ${links[i]}...`;
+      try {
+        const res = await fetch(COLLECT_API_URL + "/collect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: links[i], market_name: market.name }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          failures++;
+          continue;
+        }
+        totalInserted += data.products_inserted;
+      } catch (e) {
+        failures++;
+      }
+    }
+
+    buttons.forEach(b => b.disabled = false);
+    statusEl.className = failures > 0 ? "error" : "ok";
+    statusEl.textContent =
+      `"${market.name}": ${links.length - failures}/${links.length} links recarregados com sucesso, ` +
+      `${totalInserted} produtos atualizados.` +
+      (failures > 0 ? ` ${failures} link(s) falharam.` : "");
+
+    loadMarkets();
+    loadProducts();
   }
 
   async function loadProducts() {
     const search = document.getElementById("productSearch").value.trim();
+    const marketId = document.getElementById("marketFilter").value;
     const category = document.getElementById("categoryFilter").value;
     const source = document.getElementById("sourceFilter").value;
 
     const url = new URL(PRICE_BACK_URL + "/api/products");
     if (search) url.searchParams.set("search", search);
+    if (marketId) url.searchParams.set("market_id", marketId);
     if (category) url.searchParams.set("category", category);
     if (source) url.searchParams.set("source", source);
 
@@ -532,8 +717,9 @@
     try {
       const res = await fetch(url);
       const products = await res.json();
+      lastProducts = products;
       if (products.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum produto encontrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhum produto encontrado.</td></tr>';
         return;
       }
       tbody.innerHTML = products.map(p => `
@@ -544,16 +730,373 @@
           <td>${formatBRL(p.default_price)}</td>
           <td>${escapeHtml(p.default_market_name)}</td>
           <td><span class="pill ${p.source}">${sourceLabel[p.source] ?? p.source}</span></td>
+          <td class="row-actions">
+            <button class="edit" onclick="openEditProduct('${p.id}')">Editar</button>
+            <button class="delete" onclick="deleteProduct('${p.id}')">Excluir</button>
+          </td>
         </tr>
       `).join("");
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty">Não foi possível carregar os produtos (price-back está rodando?).</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">Não foi possível carregar os produtos (price-back está rodando?).</td></tr>';
     }
   }
+
+  // --- Edit / delete ---------------------------------------------------------
+
+  let editContext = null; // { type: "market" | "product", id }
+
+  function closeEdit() {
+    document.getElementById("editOverlay").hidden = true;
+    editContext = null;
+  }
+
+  const COPY_LINK_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const TRASH_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  const CHECK_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  const CANCEL_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  let linkPendingDeleteIndex = null;
+
+  function openEditMarket(id) {
+    const market = lastMarkets.find(m => m.id === id);
+    if (!market) return;
+    editContext = { type: "market", id, links: [...(market.links || [])] };
+    linkPendingDeleteIndex = null;
+
+    document.getElementById("editTitle").textContent = "Editar mercado";
+    document.getElementById("editFields").innerHTML = `
+      <div class="field">
+        <label for="editName">Nome</label>
+        <input id="editName" type="text" value="${escapeHtml(market.name)}" />
+      </div>
+      <div class="field">
+        <label for="editInitials">Iniciais</label>
+        <input id="editInitials" type="text" value="${escapeHtml(market.initials)}" maxlength="2" />
+      </div>
+      <div class="field">
+        <label for="editPrimaryColor">Cor</label>
+        <input id="editPrimaryColor" type="color" value="${market.primary_color}" />
+      </div>
+      <div class="field">
+        <label>Links cadastrados</label>
+        <div id="editLinksList"></div>
+        <div class="edit-links-add">
+          <input id="editNewLink" type="url" placeholder="https://www.novo-link.com.br" onkeydown="if (event.key === 'Enter') { event.preventDefault(); addEditLink(); }" />
+          <button type="button" class="ghost" onclick="addEditLink()">Adicionar</button>
+        </div>
+        <div id="editLinksStatus"></div>
+      </div>
+    `;
+    renderEditLinksList();
+    document.getElementById("editStatus").textContent = "";
+    document.getElementById("editOverlay").hidden = false;
+  }
+
+  function renderEditLinksList() {
+    const list = document.getElementById("editLinksList");
+    const links = editContext?.links || [];
+    if (links.length === 0) {
+      list.innerHTML = '<div class="muted-note">Nenhum link cadastrado.</div>';
+      return;
+    }
+    list.innerHTML = links.map((l, i) => `
+      <div class="edit-links-row">
+        <span title="${escapeHtml(l)}">${escapeHtml(l)}</span>
+        ${linkPendingDeleteIndex === i ? `
+          <button type="button" class="icon-btn confirm" title="Confirmar exclusão" onclick="removeEditLink(${i})">${CHECK_ICON}</button>
+          <button type="button" class="icon-btn cancel" title="Cancelar" onclick="cancelRemoveEditLink()">${CANCEL_ICON}</button>
+        ` : `
+          <button type="button" class="icon-btn" title="Copiar link" onclick="copyEditLink(${i})">${COPY_LINK_ICON}</button>
+          <button type="button" class="icon-btn danger" title="Remover link" onclick="askRemoveEditLink(${i})">${TRASH_ICON}</button>
+        `}
+      </div>
+    `).join("");
+  }
+
+  async function copyEditLink(index) {
+    const url = editContext?.links?.[index];
+    const statusEl = document.getElementById("editLinksStatus");
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      statusEl.className = "ok";
+      statusEl.textContent = "Link copiado.";
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = "Não foi possível copiar o link.";
+    }
+  }
+
+  function askRemoveEditLink(index) {
+    linkPendingDeleteIndex = index;
+    renderEditLinksList();
+  }
+
+  function cancelRemoveEditLink() {
+    linkPendingDeleteIndex = null;
+    renderEditLinksList();
+  }
+
+  async function addEditLink() {
+    if (!editContext || editContext.type !== "market") return;
+    const input = document.getElementById("editNewLink");
+    const url = input.value.trim();
+    const statusEl = document.getElementById("editLinksStatus");
+    if (!url) return;
+
+    statusEl.className = "";
+    statusEl.textContent = "Adicionando...";
+    try {
+      const res = await fetch(`${PRICE_BACK_URL}/api/markets/${editContext.id}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.className = "error";
+        statusEl.textContent = data.error || "Não foi possível adicionar o link.";
+        return;
+      }
+      editContext.links = data.links;
+      input.value = "";
+      statusEl.textContent = "";
+      renderEditLinksList();
+      loadMarkets();
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = "Não foi possível falar com o price-back.";
+    }
+  }
+
+  async function removeEditLink(index) {
+    if (!editContext || editContext.type !== "market") return;
+    const url = editContext.links[index];
+    if (url === undefined) return;
+    const statusEl = document.getElementById("editLinksStatus");
+    linkPendingDeleteIndex = null;
+
+    statusEl.className = "";
+    statusEl.textContent = "Removendo...";
+    try {
+      const res = await fetch(`${PRICE_BACK_URL}/api/markets/${editContext.id}/links?url=${encodeURIComponent(url)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.className = "error";
+        statusEl.textContent = data.error || "Não foi possível remover o link.";
+        return;
+      }
+      editContext.links = data.links;
+      statusEl.textContent = "";
+      renderEditLinksList();
+      loadMarkets();
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = "Não foi possível falar com o price-back.";
+    }
+  }
+
+  function openEditProduct(id) {
+    const product = lastProducts.find(p => p.id === id);
+    if (!product) return;
+    editContext = { type: "product", id };
+
+    document.getElementById("editTitle").textContent = "Editar produto";
+    document.getElementById("editFields").innerHTML = `
+      <div class="field">
+        <label for="editName">Nome</label>
+        <input id="editName" type="text" value="${escapeHtml(product.name)}" />
+      </div>
+      <div class="field">
+        <label for="editCategory">Categoria</label>
+        <select id="editCategory">
+          ${["HORTIFRUTI", "GRÃOS", "LATICÍNIOS", "CARNES", "OUTROS"].map(c =>
+            `<option value="${c}" ${c === product.category ? "selected" : ""}>${c}</option>`
+          ).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label for="editUnit">Unidade</label>
+        <input id="editUnit" type="text" value="${escapeHtml(product.unit)}" />
+      </div>
+      <div class="field">
+        <label for="editPrice">Preço</label>
+        <input id="editPrice" type="number" step="0.01" min="0.01" value="${product.default_price}" />
+      </div>
+    `;
+    document.getElementById("editStatus").textContent = "";
+    document.getElementById("editOverlay").hidden = false;
+  }
+
+  async function saveEdit() {
+    if (!editContext) return;
+    const statusEl = document.getElementById("editStatus");
+    const btn = document.getElementById("editSaveBtn");
+    statusEl.className = "";
+    statusEl.textContent = "";
+
+    let path, body;
+    if (editContext.type === "market") {
+      path = `/api/markets/${editContext.id}`;
+      body = {
+        name: document.getElementById("editName").value.trim(),
+        initials: document.getElementById("editInitials").value.trim(),
+        primary_color: document.getElementById("editPrimaryColor").value,
+      };
+    } else {
+      path = `/api/products/${editContext.id}`;
+      body = {
+        name: document.getElementById("editName").value.trim(),
+        category: document.getElementById("editCategory").value,
+        unit: document.getElementById("editUnit").value.trim(),
+        price: Number(document.getElementById("editPrice").value),
+      };
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch(PRICE_BACK_URL + path, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.className = "error";
+        statusEl.textContent = data.error || "Não foi possível salvar.";
+        return;
+      }
+      closeEdit();
+      loadMarkets();
+      loadProducts();
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = "Não foi possível falar com o price-back (está rodando na porta 8080?).";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  let pendingDelete = null; // async () => void, run when the confirm modal is accepted
+
+  function openConfirm(message, onConfirm) {
+    document.getElementById("confirmMessage").textContent = message;
+    document.getElementById("confirmStatus").textContent = "";
+    pendingDelete = onConfirm;
+    document.getElementById("confirmOverlay").hidden = false;
+  }
+
+  function closeConfirm() {
+    document.getElementById("confirmOverlay").hidden = true;
+    pendingDelete = null;
+  }
+
+  async function runConfirmedDelete() {
+    if (!pendingDelete) return;
+    const btn = document.getElementById("confirmDeleteBtn");
+    btn.disabled = true;
+    try {
+      await pendingDelete();
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function deleteMarket(id) {
+    const market = lastMarkets.find(m => m.id === id);
+    const name = market ? market.name : id;
+    openConfirm(`Excluir o mercado "${name}"? Os produtos cadastrados nele também serão excluídos.`, async () => {
+      const statusEl = document.getElementById("confirmStatus");
+      try {
+        const res = await fetch(`${PRICE_BACK_URL}/api/markets/${id}`, { method: "DELETE" });
+        if (!res.ok && res.status !== 204) {
+          statusEl.className = "error";
+          statusEl.textContent = "Não foi possível excluir o mercado.";
+          return;
+        }
+        closeConfirm();
+        loadMarkets();
+        loadProducts();
+      } catch (e) {
+        statusEl.className = "error";
+        statusEl.textContent = "Não foi possível falar com o price-back (está rodando na porta 8080?).";
+      }
+    });
+  }
+
+  function deleteProduct(id) {
+    const product = lastProducts.find(p => p.id === id);
+    const name = product ? product.name : id;
+    openConfirm(`Excluir o produto "${name}"?`, async () => {
+      const statusEl = document.getElementById("confirmStatus");
+      try {
+        const res = await fetch(`${PRICE_BACK_URL}/api/products/${id}`, { method: "DELETE" });
+        if (!res.ok && res.status !== 204) {
+          statusEl.className = "error";
+          statusEl.textContent = "Não foi possível excluir o produto.";
+          return;
+        }
+        closeConfirm();
+        loadProducts();
+      } catch (e) {
+        statusEl.className = "error";
+        statusEl.textContent = "Não foi possível falar com o price-back (está rodando na porta 8080?).";
+      }
+    });
+  }
+
+  // --- CEP auto-fill (ViaCEP) ------------------------------------------------
+
+  let cepLookupToken = 0;
+
+  function handleCepInput(input) {
+    const digits = input.value.replace(/\D/g, "").slice(0, 8);
+    input.value = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    if (digits.length === 8) lookupCep(digits);
+  }
+
+  async function lookupCep(cep) {
+    const statusEl = document.getElementById("cepStatus");
+    const token = ++cepLookupToken;
+    statusEl.className = "";
+    statusEl.textContent = "Buscando endereço...";
+
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await res.json();
+      if (token !== cepLookupToken) return; // a newer CEP was typed meanwhile
+
+      if (data.erro) {
+        statusEl.className = "error";
+        statusEl.textContent = "CEP não encontrado.";
+        return;
+      }
+
+      document.getElementById("collectStreet").value = data.logradouro || "";
+      document.getElementById("collectNeighborhood").value = data.bairro || "";
+      document.getElementById("collectCity").value = data.localidade || "";
+      document.getElementById("collectState").value = data.uf || "";
+      statusEl.className = "ok";
+      statusEl.textContent = "Endereço preenchido a partir do CEP.";
+    } catch (e) {
+      if (token !== cepLookupToken) return;
+      statusEl.className = "error";
+      statusEl.textContent = "Não foi possível consultar o CEP agora — preencha o endereço manualmente.";
+    }
+  }
+
+  // --- Coleta sob demanda -----------------------------------------------------
 
   async function runCollect() {
     const url = document.getElementById("collectUrl").value.trim();
     const marketName = document.getElementById("collectMarketName").value.trim();
+    const cep = document.getElementById("collectCep").value.trim();
+    const street = document.getElementById("collectStreet").value.trim();
+    const number = document.getElementById("collectNumber").value.trim();
+    const neighborhood = document.getElementById("collectNeighborhood").value.trim();
+    const city = document.getElementById("collectCity").value.trim();
+    const state = document.getElementById("collectState").value.trim();
     const statusEl = document.getElementById("collectStatus");
     const btn = document.getElementById("collectBtn");
 
@@ -571,12 +1114,19 @@
       const res = await fetch(COLLECT_API_URL + "/collect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, market_name: marketName }),
+        body: JSON.stringify({
+          url, market_name: marketName,
+          cep, street, number, neighborhood, city, state,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         statusEl.className = "error";
         statusEl.textContent = "Erro: " + (data.detail || res.statusText);
+        // O mercado (com o endereço) é registrado antes da coleta rodar, então
+        // mesmo se a coleta falhar (site fora do ar, seletor desatualizado
+        // etc.) ele já existe — atualiza a tabela para refletir isso.
+        loadMarkets();
         return;
       }
       statusEl.className = "ok";
