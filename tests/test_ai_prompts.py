@@ -4,6 +4,7 @@ import pytest
 
 from nextprice.ai.prompts import (
     CATEGORIES,
+    build_classification_prompt,
     build_generic_extraction_prompt,
     build_prompt,
     parse_ai_response,
@@ -48,3 +49,17 @@ def test_build_generic_extraction_prompt_com_lista_vazia_nao_quebra() -> None:
     prompt = build_generic_extraction_prompt("Loja", [])
     assert "Loja" in prompt
     assert "Blocos de Produtos" in prompt
+
+
+def test_build_classification_prompt_inclui_loja_categorias_e_nomes() -> None:
+    prompt = build_classification_prompt("CarvalhoSuperShop", ["Tomate 1kg", "Arroz 5kg"])
+    assert "CarvalhoSuperShop" in prompt
+    assert "Tomate 1kg" in prompt
+    assert "Arroz 5kg" in prompt
+    for categoria in CATEGORIES:
+        assert categoria in prompt
+
+
+def test_build_classification_prompt_nao_pede_preco() -> None:
+    prompt = build_classification_prompt("Loja", ["Tomate 1kg"])
+    assert '"preco"' not in prompt

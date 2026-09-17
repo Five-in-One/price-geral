@@ -19,8 +19,11 @@ from pydantic import BaseModel, Field
 
 from nextprice import db, storage
 from nextprice.ai.client import GeminiClient
-from nextprice.browser import collect_listing_text_blocks
+from nextprice.browser import collect_listing_text_blocks, scrape_listing, scroll_to_load
+from nextprice.categorize import classify_by_keywords, guess_unit
 from nextprice.pricing import parse_price_brl
+from nextprice.stores.base import StoreConfig
+from nextprice.stores.registry import find_store_by_url
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -43,6 +46,20 @@ app.add_middleware(
 class CollectRequest(BaseModel):
     url: str
     market_name: str = Field(min_length=1)
+    # Address fields are optional and all default to "" — the Admin panel
+    # sends whatever it has (CEP-autofilled or hand-typed), and price-back
+    # merges non-empty values into the market's stored address without
+    # blanking out what a previous submission already saved. This is the
+    # one shape every future market registration goes through, regardless
+    # of which store-specific (or generic AI) scraper ends up handling its
+    # products.
+    cep: str = ""
+    street: str = ""
+    number: str = ""
+    neighborhood: str = ""
+    city: str = ""
+    state: str = ""
+    complement: str = ""
 
 
 class CollectedProduct(BaseModel):
@@ -73,6 +90,53 @@ def scrape_blocks(url: str) -> list[str]:
             browser.close()
 
 
+def scrape_known_store(url: str, store: StoreConfig) -> list[dict]:
+    """Structured scrape for a store with registered CSS selectors: gets
+    exact nome/preco pairs straight from the page, without relying on the
+    AI to interpret raw text (unlike scrape_blocks, used for unregistered
+    markets). Split out for testability, like scrape_blocks."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            page.goto(url, timeout=60000)
+            page.wait_for_timeout(5000)
+            scroll_to_load(page)
+            return scrape_listing(page, store)
+        finally:
+            browser.close()
+
+
+def classify_products(market_name: str, produtos_brutos: list[dict]) -> list[dict]:
+    """Enriches CSS-scraped nome/preco pairs with categoria/unidade.
+    Prefers the AI's classification when it succeeds, but falls back to
+    classify_by_keywords/guess_unit (nextprice.categorize) instead of a
+    blind "OUTROS"/"un" default — the AI (Gemini) has been failing often
+    enough that a local, dependency-free classifier is the more reliable
+    default, not just a last resort."""
+    if not produtos_brutos:
+        return []
+
+    ai_client = GeminiClient()
+    classificacoes = ai_client.classify_categories(
+        market_name, [p["nome"] for p in produtos_brutos]
+    )
+
+    produtos = []
+    for item in produtos_brutos:
+        extra = classificacoes.get(item["nome"], {})
+        produtos.append(
+            {
+                "nome": item["nome"],
+                "preco": item["preco"],
+                "categoria": extra.get("categoria") or classify_by_keywords(item["nome"]),
+                "unidade": extra.get("unidade") or guess_unit(item["nome"]),
+                "loja": market_name,
+            }
+        )
+    return produtos
+
+
 def save_raw_scrape(market_name: str, url: str, produtos: list[dict]) -> None:
     """Best-effort: keeps the raw AI output in price-bot's own staging
     table regardless of what price-back accepts."""
@@ -80,7 +144,7 @@ def save_raw_scrape(market_name: str, url: str, produtos: list[dict]) -> None:
         conn = db.connect()
         db.migrate(conn)
         try:
-            storage.save_to_postgres(
+            saved = storage.save_to_postgres(
                 conn,
                 store_key=market_name.lower().replace(" ", "-"),
                 store_name=market_name,
@@ -88,10 +152,67 @@ def save_raw_scrape(market_name: str, url: str, produtos: list[dict]) -> None:
                 source="admin_link",
                 search_term=url,
             )
+            logger.info("[%s] %d produtos salvos na coleta bruta (price_bot_db).", market_name, saved)
         finally:
             conn.close()
     except Exception:
         logger.warning("Não foi possível salvar a coleta bruta no Postgres.", exc_info=True)
+
+
+def register_market(payload: CollectRequest, client: httpx.Client | None = None) -> None:
+    """Registers (or updates) the market in price-back with its storefront
+    link and address, ahead of any scraping. Best-effort and never raises:
+    a market's address is worth saving even if the site turns out to be
+    unscrapable, and a previous successful registration must not be lost
+    just because this call fails.
+
+    price-back keys a market by name, not by URL, and accumulates every
+    distinct link submitted for that name — so a chain with more than one
+    domain (or a market whose site moved) just ends up with several links
+    instead of several markets. This is also what the Admin panel's
+    "Recarregar" button re-collects: every link stored for a market.
+    """
+    owns_client = client is None
+    if client is None:
+        client = httpx.Client(timeout=15)
+
+    try:
+        resp = client.post(
+            f"{PRICE_BACK_URL}/api/markets",
+            json={
+                "name": payload.market_name,
+                "source": "bot",
+                "link": payload.url,
+                "cep": payload.cep,
+                "street": payload.street,
+                "number": payload.number,
+                "neighborhood": payload.neighborhood,
+                "city": payload.city,
+                "state": payload.state,
+                "complement": payload.complement,
+            },
+        )
+        if resp.status_code == 201:
+            logger.info(
+                "[%s] Mercado registrado em price-back (id=%s, endereço=%s).",
+                payload.market_name,
+                resp.json().get("id"),
+                "sim" if (payload.cep or payload.street or payload.city) else "não informado",
+            )
+        else:
+            logger.warning(
+                "price-back rejeitou o registro do mercado '%s': %s %s",
+                payload.market_name,
+                resp.status_code,
+                resp.text,
+            )
+    except httpx.HTTPError:
+        logger.warning(
+            "Falha ao registrar o mercado '%s' no price-back.", payload.market_name, exc_info=True
+        )
+    finally:
+        if owns_client:
+            client.close()
 
 
 def push_to_price_back(
@@ -141,18 +262,48 @@ def push_to_price_back(
         if owns_client:
             client.close()
 
+    logger.info(
+        "[%s] %d/%d produtos aceitos por price-back.", market_name, len(inserted), len(produtos_validos)
+    )
     return inserted
 
 
 @app.post("/collect", response_model=CollectResponse)
 def collect(payload: CollectRequest) -> CollectResponse:
-    try:
-        blocks = scrape_blocks(payload.url)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Falha ao acessar a URL: {exc}") from exc
+    logger.info("[%s] Coleta solicitada — url=%s", payload.market_name, payload.url)
+    register_market(payload)
 
-    ai_client = GeminiClient()
-    produtos = ai_client.extract_products_generic(payload.market_name, blocks)
+    store = find_store_by_url(payload.url)
+
+    if store is not None:
+        logger.info(
+            "[%s] Loja conhecida (%s) — usando seletores CSS registrados.", payload.market_name, store.key
+        )
+        try:
+            produtos_brutos = scrape_known_store(payload.url, store)
+        except Exception as exc:
+            logger.error("[%s] Falha ao acessar a URL: %s", payload.market_name, exc, exc_info=True)
+            raise HTTPException(status_code=502, detail=f"Falha ao acessar a URL: {exc}") from exc
+        blocks_found = len(produtos_brutos)
+        logger.info("[%s] %d produtos encontrados na página.", payload.market_name, blocks_found)
+        produtos = classify_products(payload.market_name, produtos_brutos)
+        logger.info("[%s] %d produtos classificados (categoria/unidade).", payload.market_name, len(produtos))
+    else:
+        logger.info(
+            "[%s] Loja não registrada — usando extração genérica via IA.", payload.market_name
+        )
+        try:
+            blocks = scrape_blocks(payload.url)
+        except Exception as exc:
+            logger.error("[%s] Falha ao acessar a URL: %s", payload.market_name, exc, exc_info=True)
+            raise HTTPException(status_code=502, detail=f"Falha ao acessar a URL: {exc}") from exc
+        blocks_found = len(blocks)
+        logger.info("[%s] %d blocos de texto coletados da página.", payload.market_name, blocks_found)
+        ai_client = GeminiClient()
+        produtos = ai_client.extract_products_generic(payload.market_name, blocks)
+        logger.info(
+            "[%s] IA reconheceu %d produtos a partir dos blocos.", payload.market_name, len(produtos)
+        )
 
     validos = []
     for item in produtos:
@@ -161,13 +312,27 @@ def collect(payload: CollectRequest) -> CollectResponse:
         except (ValueError, KeyError, TypeError):
             continue
         validos.append(item)
+    if len(validos) < len(produtos):
+        logger.info(
+            "[%s] %d produtos descartados por preço inválido/ilegível.",
+            payload.market_name,
+            len(produtos) - len(validos),
+        )
 
     save_raw_scrape(payload.market_name, payload.url, produtos)
     inserted = push_to_price_back(payload.market_name, validos)
 
+    logger.info(
+        "[%s] Coleta concluída: %d encontrados, %d extraídos, %d inseridos em price-back.",
+        payload.market_name,
+        blocks_found,
+        len(produtos),
+        len(inserted),
+    )
+
     return CollectResponse(
         market_name=payload.market_name,
-        blocks_found=len(blocks),
+        blocks_found=blocks_found,
         products_extracted=len(produtos),
         products_inserted=len(inserted),
         products=[

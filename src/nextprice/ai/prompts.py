@@ -62,6 +62,37 @@ def build_generic_extraction_prompt(loja: str, card_texts: list[str]) -> str:
     )
 
 
+CLASSIFICATION_PROMPT_TEMPLATE = """
+Classifique cada um dos produtos abaixo, coletados do supermercado '{loja}'.
+
+Para cada produto, escolha a categoria em EXATAMENTE uma destas opções:
+{categorias}. Se nenhuma se aplicar bem, use "OUTROS". Estime também a
+unidade de venda mais provável (ex.: "kg", "un", "pct", "L") a partir do
+nome; se não for possível saber, use "un".
+
+Retorne a resposta EXATAMENTE no formato de uma lista JSON válida de
+objetos, onde cada objeto tem as chaves "nome", "categoria" e "unidade" —
+um objeto para cada produto listado abaixo. Exemplo:
+[
+  {{"nome": "Tomate Longa Vida 1kg", "categoria": "HORTIFRUTI", "unidade": "kg"}}
+]
+
+Produtos:
+{nomes}
+"""
+
+
+def build_classification_prompt(loja: str, nomes_produtos: list[str]) -> str:
+    """Monta o prompt que pede à IA só a categoria/unidade de produtos cujo
+    nome e preço já foram extraídos via seletores CSS (loja conhecida) —
+    uma chamada mais leve que build_generic_extraction_prompt, já que a IA
+    não precisa mais interpretar nome/preço a partir de texto bruto."""
+    nomes = "\n".join(f"- {nome}" for nome in nomes_produtos)
+    return CLASSIFICATION_PROMPT_TEMPLATE.format(
+        loja=loja, categorias=", ".join(CATEGORIES), nomes=nomes
+    )
+
+
 def parse_ai_response(raw_text: str) -> list[dict]:
     """Valida e converte a resposta JSON da IA em uma lista de produtos.
 

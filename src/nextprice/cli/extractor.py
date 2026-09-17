@@ -7,7 +7,7 @@ from playwright.sync_api import sync_playwright
 
 from nextprice import db
 from nextprice.browser import scrape_listing, scroll_to_load
-from nextprice.storage import save_json, save_to_postgres
+from nextprice.storage import dedupe_by_name, save_json, save_to_postgres
 from nextprice.stores.base import StoreConfig
 from nextprice.stores.registry import STORES
 
@@ -26,10 +26,11 @@ def run_store(store: StoreConfig, conn: psycopg.Connection | None) -> None:
         produtos = scrape_listing(page, store)
         browser.close()
 
-    save_json(store.name, produtos)
+    unicos = dedupe_by_name(produtos)
+    save_json(store.name, unicos)
 
     if conn is not None:
-        save_to_postgres(conn, store.key, store.name, produtos, source="extract")
+        save_to_postgres(conn, store.key, store.name, unicos, source="extract")
 
 
 def _connect_or_none() -> psycopg.Connection | None:

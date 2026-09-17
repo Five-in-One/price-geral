@@ -1,13 +1,56 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 
 from playwright.sync_api import Page
 
 from nextprice.stores.base import StoreConfig
+from nextprice.text import normalize
 
 logger = logging.getLogger(__name__)
+
+# Banners promocionais nesses sites ("Atacado SUPER!", "Da Nossa Família
+# para Sua!", emojis à parte) reaproveitam a mesma classe CSS dos cards de
+# produto de verdade — não dá pra distinguir só pelo seletor. Na prática,
+# produtos de mercearia raspados aqui nunca têm emoji no nome; banners
+# promocionais quase sempre têm. Cobre os blocos Unicode de emoji mais
+# comuns (pictográficos, símbolos diversos/dingbats, bandeiras).
+_EMOJI_PATTERN = re.compile(
+    "[" "\U0001f300-\U0001faff" "\U00002600-\U000027bf" "\U0001f1e6-\U0001f1ff" "]"
+)
+
+# Nem todo banner tem emoji ("Ofertas do dia", "Mais Vendidos", "Peso
+# Variável", "Exclusivo Delivery" passaram batido). Essas são frases de
+# vitrine/UI que nunca aparecem como nome de produto de mercearia — lista
+# comparada sem acento (ver _normalize) para cobrir variações de grafia.
+_BANNER_KEYWORDS = (
+    "oferta",
+    "promocao",
+    "mais vendido",
+    "destaque",
+    "exclusivo",
+    "delivery",
+    "peso vari",  # "peso variável" / "peso variavel"
+    "novidade",
+    "desconto",
+    "frete gratis",
+    "cupom",
+    "confira",
+    "aproveite",
+    "leve mais",
+    "compre e leve",
+)
+
+
+def _looks_like_banner(nome: str) -> bool:
+    """Heurística para filtrar banners/rótulos de vitrine capturados junto
+    com produtos de verdade pelo mesmo seletor CSS — por emoji
+    (_EMOJI_PATTERN) ou por frase típica de banner (_BANNER_KEYWORDS)."""
+    if _EMOJI_PATTERN.search(nome):
+        return True
+    return any(palavra in normalize(nome) for palavra in _BANNER_KEYWORDS)
 
 
 def scroll_to_load(
@@ -43,6 +86,8 @@ def scrape_listing(page: Page, store: StoreConfig) -> list[dict]:
             nome = nome_el.inner_text().strip()
 
             if len(nome) <= 3 or nome == preco:
+                continue
+            if _looks_like_banner(nome):
                 continue
             nome_lower = nome.lower()
             if any(termo in nome_lower for termo in store.exclude_name_substrings):
@@ -86,7 +131,12 @@ def collect_listing_text_blocks(page: Page, url: str, max_block_len: int = 300) 
     for el in elementos:
         try:
             texto = el.inner_text().strip()
-            if "R$" in texto and 0 < len(texto) < max_block_len and texto not in blocos:
+            if (
+                "R$" in texto
+                and 0 < len(texto) < max_block_len
+                and texto not in blocos
+                and not _looks_like_banner(texto)
+            ):
                 blocos.append(texto)
         except Exception:
             logger.debug("Falha ao ler um bloco de %s, ignorando.", url, exc_info=True)

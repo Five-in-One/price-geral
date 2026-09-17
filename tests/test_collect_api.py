@@ -1,10 +1,27 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from nextprice import collect_api
+
+# Saved before the autouse fixture below patches collect_api.register_market,
+# so the tests that exercise register_market itself call the real thing.
+_real_register_market = collect_api.register_market
+
+
+@pytest.fixture(autouse=True)
+def _stub_register_market(monkeypatch: pytest.MonkeyPatch) -> list:
+    """collect() registers the market with price-back before scraping —
+    stub it out for every test in this file so none of them make a real
+    network call; tests that care about the payload replace this stub or
+    call register_market directly (see test_register_market_*)."""
+    calls: list = []
+    monkeypatch.setattr(collect_api, "register_market", lambda payload, client=None: calls.append(payload))
+    return calls
 
 
 def test_push_to_price_back_returns_only_accepted_items() -> None:
@@ -45,6 +62,59 @@ def test_push_to_price_back_network_error_is_swallowed() -> None:
 
 def test_push_to_price_back_empty_list_returns_empty() -> None:
     assert collect_api.push_to_price_back("Loja", []) == []
+
+
+def test_register_market_sends_url_as_link_and_address_fields() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = json.loads(request.read())
+        return httpx.Response(201, json={"id": "m1"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    payload = collect_api.CollectRequest(
+        url="https://loja.exemplo/",
+        market_name="Loja Exemplo",
+        cep="64000-000",
+        street="Rua X",
+        number="10",
+        city="Teresina",
+        state="PI",
+    )
+
+    _real_register_market(payload, client=client)
+
+    assert captured["json"] == {
+        "name": "Loja Exemplo",
+        "source": "bot",
+        "link": "https://loja.exemplo/",
+        "cep": "64000-000",
+        "street": "Rua X",
+        "number": "10",
+        "neighborhood": "",
+        "city": "Teresina",
+        "state": "PI",
+        "complement": "",
+    }
+
+
+def test_register_market_network_error_is_swallowed() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    payload = collect_api.CollectRequest(url="https://loja.exemplo/", market_name="Loja Exemplo")
+
+    _real_register_market(payload, client=client)  # must not raise
+
+
+def test_register_market_rejection_is_swallowed() -> None:
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(400, json={"error": "bad"}))
+    )
+    payload = collect_api.CollectRequest(url="https://loja.exemplo/", market_name="Loja Exemplo")
+
+    _real_register_market(payload, client=client)  # must not raise
 
 
 @pytest.fixture
@@ -148,3 +218,178 @@ def test_collect_endpoint_scrape_failure_returns_502(
 def test_collect_endpoint_requires_market_name(client: TestClient) -> None:
     resp = client.post("/collect", json={"url": "https://loja.exemplo/", "market_name": ""})
     assert resp.status_code == 422
+
+
+def test_collect_endpoint_registers_market_even_when_scrape_fails(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient, _stub_register_market: list
+) -> None:
+    """The market's address is worth saving even if the site turns out to
+    be unscrapable — registration must happen before the scrape attempt,
+    not after."""
+    monkeypatch.setattr(
+        collect_api, "scrape_blocks", lambda url: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+
+    resp = client.post(
+        "/collect",
+        json={
+            "url": "https://loja.exemplo/",
+            "market_name": "Loja Exemplo",
+            "cep": "64000-000",
+            "city": "Teresina",
+            "state": "PI",
+        },
+    )
+
+    assert resp.status_code == 502
+    assert len(_stub_register_market) == 1
+    assert _stub_register_market[0].market_name == "Loja Exemplo"
+    assert _stub_register_market[0].cep == "64000-000"
+
+
+class _FakeGeminiClassifier:
+    """Stands in for GeminiClient in the known-store path (classify_categories
+    only — unlike _FakeGeminiClient, this path never calls extract_products_generic)."""
+
+    def __init__(self, classificacoes: dict[str, dict]) -> None:
+        self._classificacoes = classificacoes
+
+    def classify_categories(self, loja: str, nomes_produtos: list[str]) -> dict[str, dict]:
+        return self._classificacoes
+
+
+def test_classify_products_empty_list_returns_empty() -> None:
+    assert collect_api.classify_products("Loja", []) == []
+
+
+def test_classify_products_defaults_when_ai_returns_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(collect_api, "GeminiClient", lambda: _FakeGeminiClassifier({}))
+
+    produtos = collect_api.classify_products("Loja", [{"nome": "Item X", "preco": "R$ 1,00"}])
+
+    assert produtos == [
+        {
+            "nome": "Item X",
+            "preco": "R$ 1,00",
+            "categoria": "OUTROS",
+            "unidade": "un",
+            "loja": "Loja",
+        }
+    ]
+
+
+def test_classify_products_uses_ai_classification_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        collect_api,
+        "GeminiClient",
+        lambda: _FakeGeminiClassifier(
+            {"Tomate 1kg": {"categoria": "HORTIFRUTI", "unidade": "kg"}}
+        ),
+    )
+
+    produtos = collect_api.classify_products("Loja", [{"nome": "Tomate 1kg", "preco": "R$ 7,79"}])
+
+    assert produtos[0]["categoria"] == "HORTIFRUTI"
+    assert produtos[0]["unidade"] == "kg"
+
+
+def test_collect_endpoint_known_store_uses_css_selectors_not_ai_for_name_price(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    monkeypatch.setattr(
+        collect_api,
+        "scrape_known_store",
+        lambda url, store: [{"nome": "Tomate 1kg", "preco": "R$ 7,79"}],
+    )
+    monkeypatch.setattr(
+        collect_api,
+        "GeminiClient",
+        lambda: _FakeGeminiClassifier(
+            {"Tomate 1kg": {"categoria": "HORTIFRUTI", "unidade": "kg"}}
+        ),
+    )
+    monkeypatch.setattr(collect_api, "save_raw_scrape", lambda *a, **k: None)
+    monkeypatch.setattr(
+        collect_api,
+        "push_to_price_back",
+        lambda market_name, validos: [
+            {"name": "Tomate 1kg", "unit": "kg", "category": "HORTIFRUTI", "default_price": 7.79}
+        ],
+    )
+
+    resp = client.post(
+        "/collect",
+        json={
+            "url": "https://www.carvalhosupershop.com.br/",
+            "market_name": "CarvalhoSuperShop",
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["blocks_found"] == 1
+    assert data["products_extracted"] == 1
+    assert data["products_inserted"] == 1
+
+
+def test_collect_endpoint_known_store_survives_ai_classification_failure(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """Core resilience guarantee: for a registered store, real nome/preco
+    still reaches price-back even when the AI is completely unavailable —
+    unlike the generic (unregistered-market) flow, which drops everything
+    if the AI fails. Falls back to the keyword classifier (nextprice.categorize),
+    not a blind "OUTROS"/"un", so "Tomate 1kg" still lands correctly."""
+    monkeypatch.setattr(
+        collect_api,
+        "scrape_known_store",
+        lambda url, store: [{"nome": "Tomate 1kg", "preco": "R$ 7,79"}],
+    )
+    monkeypatch.setattr(collect_api, "GeminiClient", lambda: _FakeGeminiClassifier({}))
+    monkeypatch.setattr(collect_api, "save_raw_scrape", lambda *a, **k: None)
+
+    captured: dict = {}
+
+    def fake_push(market_name: str, validos: list[dict]) -> list[dict]:
+        captured["validos"] = validos
+        return []
+
+    monkeypatch.setattr(collect_api, "push_to_price_back", fake_push)
+
+    resp = client.post(
+        "/collect",
+        json={
+            "url": "https://www.carvalhosupershop.com.br/",
+            "market_name": "CarvalhoSuperShop",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert len(captured["validos"]) == 1
+    produto = captured["validos"][0]
+    assert produto["nome"] == "Tomate 1kg"
+    assert produto["categoria"] == "HORTIFRUTI"
+    assert produto["unidade"] == "kg"
+
+
+def test_collect_endpoint_known_store_scrape_failure_returns_502(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    def boom(url: str, store: object) -> list[dict]:
+        raise RuntimeError("site fora do ar")
+
+    monkeypatch.setattr(collect_api, "scrape_known_store", boom)
+
+    resp = client.post(
+        "/collect",
+        json={
+            "url": "https://www.carvalhosupershop.com.br/",
+            "market_name": "CarvalhoSuperShop",
+        },
+    )
+
+    assert resp.status_code == 502

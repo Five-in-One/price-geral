@@ -5,7 +5,12 @@ import logging
 from google import genai
 from google.genai import types
 
-from nextprice.ai.prompts import build_generic_extraction_prompt, build_prompt, parse_ai_response
+from nextprice.ai.prompts import (
+    build_classification_prompt,
+    build_generic_extraction_prompt,
+    build_prompt,
+    parse_ai_response,
+)
 from nextprice.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -43,6 +48,38 @@ class GeminiClient:
         for item in produtos:
             item["loja"] = loja
         return produtos
+
+    def classify_categories(self, loja: str, nomes_produtos: list[str]) -> dict[str, dict]:
+        """Como extract_products_generic, mas para produtos cujo nome/preço
+        já vieram de seletores CSS (loja conhecida): pede à IA só
+        categoria/unidade, uma chamada mais leve. Retorna um dict
+        nome -> {categoria, unidade}; dict vazio se a IA falhar, para o
+        chamador aplicar um default em vez de descartar o produto."""
+        if not nomes_produtos:
+            return {}
+
+        prompt = build_classification_prompt(loja, nomes_produtos)
+        try:
+            response = self._client.models.generate_content(
+                model=_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.1,
+                ),
+            )
+            if response.text is None:
+                raise ValueError("Resposta da IA veio vazia (sem texto).")
+            classificacoes = parse_ai_response(response.text)
+        except Exception:
+            logger.warning("[%s] Falha ao classificar categorias com a IA.", loja, exc_info=True)
+            return {}
+
+        return {
+            item["nome"]: item
+            for item in classificacoes
+            if isinstance(item, dict) and "nome" in item
+        }
 
     def extract_products_generic(self, loja: str, card_texts: list[str]) -> list[dict]:
         """Como extract_products, mas sem termo de busca: usada pela coleta
