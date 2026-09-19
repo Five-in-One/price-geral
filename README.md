@@ -28,8 +28,16 @@ go run ./cmd/api
 ```
 
 Migrations em `migrations/*.sql` aplicam automaticamente na inicialização.
-Sobe em `:8081` por padrão (`PORT` no ambiente para mudar). Defina
-`JWT_SECRET` em produção — sem ele, usa um valor de desenvolvimento fixo.
+Sobe em `:8081` por padrão. Defina `JWT_SECRET` em produção — sem ele, usa um
+valor de desenvolvimento fixo.
+
+| Variável | Padrão | Para quê |
+|---|---|---|
+| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/price_auth_db?sslmode=disable` | conexão com o Postgres |
+| `PORT` | `8081` | porta HTTP |
+| `JWT_SECRET` | `dev-secret-change-me` | segredo que assina os tokens (HS256) |
+
+Há um `.env.example` com esses valores.
 
 ## Rodar os testes
 
