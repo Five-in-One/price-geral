@@ -66,6 +66,7 @@ para o estado seedado antes de cada teste.
 | GET | `/api/catalog/suggestions?status=` | fila de revisão (padrão `pending`) |
 | POST | `/api/catalog/suggestions/{id}/accept` | "são o mesmo produto": junta e trava a decisão |
 | POST | `/api/catalog/suggestions/{id}/reject` | "não são o mesmo": nunca mais é sugerido |
+| GET | `/api/geocode/reverse?lat=&lng=` | endereço de uma posição (`street`, `neighborhood`, `city`, `state`, `cep` e `label` numa linha só), via OpenStreetMap Nominatim. O app usa depois de ler o GPS para mostrar onde a pessoa está. `400` sem coordenadas válidas, `404` se não há endereço ali, `502` se o Nominatim falhar |
 
 Histórico de economia (`/api/savings-history`, `/api/economy/summary`)
 mudou para o serviço `price-user` — veja `../price-user/README.md`.
