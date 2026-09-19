@@ -3,8 +3,10 @@ package httpserver
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,11 +18,12 @@ import (
 func productsRouter(pool *pgxpool.Pool) chi.Router {
 	productsRepo := repository.NewProductsRepo(pool)
 	marketsRepo := repository.NewMarketsRepo(pool)
+	catalogRepo := repository.NewCatalogRepo(pool)
 
 	r := chi.NewRouter()
 	r.Get("/", listProductsHandler(productsRepo))
-	r.Post("/", createProductHandler(productsRepo, marketsRepo))
-	r.Patch("/{id}", updateProductHandler(productsRepo))
+	r.Post("/", createProductHandler(productsRepo, marketsRepo, catalogRepo))
+	r.Patch("/{id}", updateProductHandler(productsRepo, catalogRepo))
 	r.Delete("/{id}", deleteProductHandler(productsRepo))
 	return r
 }
@@ -59,9 +62,52 @@ type createProductRequest struct {
 	MarketID   string  `json:"market_id"`
 	MarketName string  `json:"market_name"`
 	Source     string  `json:"source"`
+
+	// Optional fields the bot extracts from the scraped name.
+	Brand        string     `json:"brand"`
+	GenericKey   string     `json:"generic_key"`
+	PackCount    int        `json:"pack_count"`
+	SizeKind     string     `json:"size_kind"`
+	SizeAmount   *float64   `json:"size_amount"`
+	SizeLabel    string     `json:"size_label"`
+	SoldByWeight bool       `json:"sold_by_weight"`
+	CollectedAt  *time.Time `json:"collected_at"`
 }
 
-func createProductHandler(productsRepo *repository.ProductsRepo, marketsRepo *repository.MarketsRepo) http.HandlerFunc {
+// validSizeKinds are the measurement families a product size can be in
+// (grams, millilitres, metres).
+var validSizeKinds = map[string]bool{"mass": true, "volume": true, "length": true}
+
+// validateSize checks that size_kind and size_amount come together and make
+// sense. It returns the error message to send back, or "" when fine.
+func validateSize(kind string, amount *float64) string {
+	if kind == "" && amount == nil {
+		return ""
+	}
+	if !validSizeKinds[kind] {
+		return "size_kind must be 'mass', 'volume' or 'length'"
+	}
+	if amount == nil || *amount <= 0 {
+		return "size_amount must be greater than zero when size_kind is set"
+	}
+	return ""
+}
+
+// linkToCatalog attaches a listing to its canonical catalog item right after
+// it is saved. Best-effort: a matching problem must never fail (or roll back)
+// the price registration itself — `POST /api/catalog/match` can catch up.
+func linkToCatalog(req *http.Request, catalogRepo *repository.CatalogRepo, productsRepo *repository.ProductsRepo, product models.Product) models.Product {
+	if _, err := catalogRepo.LinkProduct(req.Context(), product.ID); err != nil {
+		log.Printf("linking product %q to the catalog failed: %v", product.ID, err)
+		return product
+	}
+	if linked, err := productsRepo.GetByID(req.Context(), product.ID); err == nil {
+		return linked
+	}
+	return product
+}
+
+func createProductHandler(productsRepo *repository.ProductsRepo, marketsRepo *repository.MarketsRepo, catalogRepo *repository.CatalogRepo) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		var body createProductRequest
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
@@ -97,6 +143,21 @@ func createProductHandler(productsRepo *repository.ProductsRepo, marketsRepo *re
 			return
 		}
 
+		body.SizeKind = strings.TrimSpace(body.SizeKind)
+		if msg := validateSize(body.SizeKind, body.SizeAmount); msg != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
+			return
+		}
+		if body.PackCount < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "pack_count cannot be negative"})
+			return
+		}
+		// A price cannot have been observed in the future (allow some clock skew).
+		if body.CollectedAt != nil && body.CollectedAt.After(time.Now().Add(5*time.Minute)) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "collected_at cannot be in the future"})
+			return
+		}
+
 		if marketID == "" {
 			primary, background := pickPalette(marketName)
 			market, err := marketsRepo.FindOrCreate(req.Context(), repository.CreateMarketInput{
@@ -122,6 +183,17 @@ func createProductHandler(productsRepo *repository.ProductsRepo, marketsRepo *re
 			MarketID: marketID,
 			Price:    body.Price,
 			Source:   source,
+
+			HasParsed: body.Brand != "" || body.GenericKey != "" || body.PackCount > 0 ||
+				body.SizeKind != "" || body.SizeLabel != "" || body.SoldByWeight,
+			Brand:        strings.TrimSpace(body.Brand),
+			GenericKey:   strings.TrimSpace(body.GenericKey),
+			PackCount:    body.PackCount,
+			SizeKind:     body.SizeKind,
+			SizeAmount:   body.SizeAmount,
+			SizeLabel:    strings.TrimSpace(body.SizeLabel),
+			SoldByWeight: body.SoldByWeight,
+			CollectedAt:  body.CollectedAt,
 		})
 		if err != nil {
 			if errors.Is(err, repository.ErrMarketNotFound) {
@@ -132,7 +204,7 @@ func createProductHandler(productsRepo *repository.ProductsRepo, marketsRepo *re
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, product)
+		writeJSON(w, http.StatusCreated, linkToCatalog(req, catalogRepo, productsRepo, product))
 	}
 }
 
@@ -141,9 +213,17 @@ type updateProductRequest struct {
 	Unit     *string  `json:"unit"`
 	Category *string  `json:"category"`
 	Price    *float64 `json:"price"`
+
+	Brand        *string  `json:"brand"`
+	GenericKey   *string  `json:"generic_key"`
+	PackCount    *int     `json:"pack_count"`
+	SizeKind     *string  `json:"size_kind"`
+	SizeAmount   *float64 `json:"size_amount"`
+	SizeLabel    *string  `json:"size_label"`
+	SoldByWeight *bool    `json:"sold_by_weight"`
 }
 
-func updateProductHandler(repo *repository.ProductsRepo) http.HandlerFunc {
+func updateProductHandler(repo *repository.ProductsRepo, catalogRepo *repository.CatalogRepo) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		id := chi.URLParam(req, "id")
 
@@ -181,12 +261,37 @@ func updateProductHandler(repo *repository.ProductsRepo) http.HandlerFunc {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "price must be greater than zero"})
 			return
 		}
+		if body.PackCount != nil && *body.PackCount < 1 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "pack_count must be at least 1"})
+			return
+		}
+		if body.SizeKind != nil {
+			trimmed := strings.TrimSpace(*body.SizeKind)
+			body.SizeKind = &trimmed
+			if trimmed == "" {
+				body.SizeAmount = nil // clears the size
+			} else if msg := validateSize(trimmed, body.SizeAmount); msg != "" {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
+				return
+			}
+		} else if body.SizeAmount != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "size_amount needs size_kind"})
+			return
+		}
 
 		product, err := repo.Update(req.Context(), id, repository.UpdateProductInput{
 			Name:     body.Name,
 			Unit:     body.Unit,
 			Category: body.Category,
 			Price:    body.Price,
+
+			Brand:        body.Brand,
+			GenericKey:   body.GenericKey,
+			PackCount:    body.PackCount,
+			SizeKind:     body.SizeKind,
+			SizeAmount:   body.SizeAmount,
+			SizeLabel:    body.SizeLabel,
+			SoldByWeight: body.SoldByWeight,
 		})
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
@@ -195,6 +300,12 @@ func updateProductHandler(repo *repository.ProductsRepo) http.HandlerFunc {
 			}
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update product"})
 			return
+		}
+
+		// New parsed fields can change which catalog item the listing belongs to.
+		if body.Brand != nil || body.GenericKey != nil || body.PackCount != nil ||
+			body.SizeKind != nil || body.SoldByWeight != nil {
+			product = linkToCatalog(req, catalogRepo, repo, product)
 		}
 
 		writeJSON(w, http.StatusOK, product)

@@ -23,14 +23,14 @@ func NewMarketsRepo(pool *pgxpool.Pool) *MarketsRepo {
 // to "") shared by every SELECT that returns a full Market — except Links,
 // which lives in market_links and is attached separately (see attachLinks).
 const marketColumns = `
-	id, name, initials, latitude, longitude, primary_color, background_color, source,
+	id, name, initials, latitude, longitude, has_location, primary_color, background_color, source,
 	COALESCE(cep, ''), COALESCE(street, ''), COALESCE(number, ''),
 	COALESCE(neighborhood, ''), COALESCE(city, ''), COALESCE(state, ''), COALESCE(complement, '')
 `
 
 func scanMarket(row interface{ Scan(...any) error }, m *models.Market) error {
 	return row.Scan(
-		&m.ID, &m.Name, &m.Initials, &m.Latitude, &m.Longitude, &m.PrimaryColor, &m.BackgroundColor, &m.Source,
+		&m.ID, &m.Name, &m.Initials, &m.Latitude, &m.Longitude, &m.HasLocation, &m.PrimaryColor, &m.BackgroundColor, &m.Source,
 		&m.CEP, &m.Street, &m.Number, &m.Neighborhood, &m.City, &m.State, &m.Complement,
 	)
 }
@@ -142,10 +142,15 @@ func (r *MarketsRepo) GetByID(ctx context.Context, id string) (models.Market, er
 // CreateMarketInput describes a market to create (Admin's on-demand
 // collection or the Partner Company page).
 type CreateMarketInput struct {
-	Name            string
-	Initials        string
-	Latitude        float64
-	Longitude       float64
+	Name      string
+	Initials  string
+	Latitude  float64
+	Longitude float64
+	// HasLocation says whether Latitude/Longitude are real coordinates
+	// (geocoded from the address, or sent explicitly) rather than a
+	// placeholder. A placeholder never overwrites real coordinates already
+	// stored for a market resubmitted by name.
+	HasLocation     bool
 	PrimaryColor    string
 	BackgroundColor string
 	Source          string // "company" or "bot"
@@ -183,11 +188,14 @@ func (r *MarketsRepo) FindOrCreate(ctx context.Context, input CreateMarketInput)
 	err = tx.QueryRow(ctx, `
 		INSERT INTO markets (
 			id, name, initials, latitude, longitude, primary_color, background_color, source,
-			cep, street, number, neighborhood, city, state, complement
+			cep, street, number, neighborhood, city, state, complement, has_location
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		ON CONFLICT (lower(name)) DO UPDATE SET
 			name         = markets.name,
+			latitude     = CASE WHEN EXCLUDED.has_location THEN EXCLUDED.latitude ELSE markets.latitude END,
+			longitude    = CASE WHEN EXCLUDED.has_location THEN EXCLUDED.longitude ELSE markets.longitude END,
+			has_location = markets.has_location OR EXCLUDED.has_location,
 			cep          = COALESCE(NULLIF(EXCLUDED.cep, ''), markets.cep),
 			street       = COALESCE(NULLIF(EXCLUDED.street, ''), markets.street),
 			number       = COALESCE(NULLIF(EXCLUDED.number, ''), markets.number),
@@ -198,6 +206,7 @@ func (r *MarketsRepo) FindOrCreate(ctx context.Context, input CreateMarketInput)
 		RETURNING id
 	`, id, input.Name, input.Initials, input.Latitude, input.Longitude, input.PrimaryColor, input.BackgroundColor, input.Source,
 		input.CEP, input.Street, input.Number, input.Neighborhood, input.City, input.State, input.Complement,
+		input.HasLocation,
 	).Scan(&marketID)
 	if err != nil {
 		return models.Market{}, err
@@ -229,6 +238,25 @@ type UpdateMarketInput struct {
 	Initials        *string
 	PrimaryColor    *string
 	BackgroundColor *string
+	// Address fields; nil leaves the stored value, "" clears it.
+	CEP          *string
+	Street       *string
+	Number       *string
+	Neighborhood *string
+	City         *string
+	State        *string
+	Complement   *string
+	// Location, when set, overwrites the stored coordinates — used after the
+	// address changed and was geocoded again (or could not be).
+	Location *LocationUpdate
+}
+
+// LocationUpdate is a new set of coordinates for a market. With
+// HasLocation false the market goes back to "no known location".
+type LocationUpdate struct {
+	Latitude    float64
+	Longitude   float64
+	HasLocation bool
 }
 
 // Update applies the given fields to a market, returning ErrNotFound if no
@@ -241,6 +269,9 @@ func (r *MarketsRepo) Update(ctx context.Context, id string, input UpdateMarketI
 
 	name, initials := current.Name, current.Initials
 	primary, background := current.PrimaryColor, current.BackgroundColor
+	cep, street, number := current.CEP, current.Street, current.Number
+	neighborhood, city, state, complement := current.Neighborhood, current.City, current.State, current.Complement
+	lat, lng, hasLocation := current.Latitude, current.Longitude, current.HasLocation
 	if input.Name != nil {
 		name = *input.Name
 	}
@@ -253,11 +284,31 @@ func (r *MarketsRepo) Update(ctx context.Context, id string, input UpdateMarketI
 	if input.BackgroundColor != nil {
 		background = *input.BackgroundColor
 	}
+	for _, f := range []struct {
+		in  *string
+		out *string
+	}{
+		{input.CEP, &cep}, {input.Street, &street}, {input.Number, &number},
+		{input.Neighborhood, &neighborhood}, {input.City, &city},
+		{input.State, &state}, {input.Complement, &complement},
+	} {
+		if f.in != nil {
+			*f.out = *f.in
+		}
+	}
+	if input.Location != nil {
+		lat, lng, hasLocation = input.Location.Latitude, input.Location.Longitude, input.Location.HasLocation
+	}
 
 	if _, err := r.pool.Exec(ctx, `
-		UPDATE markets SET name = $1, initials = $2, primary_color = $3, background_color = $4
-		WHERE id = $5
-	`, name, initials, primary, background, id); err != nil {
+		UPDATE markets SET
+			name = $1, initials = $2, primary_color = $3, background_color = $4,
+			cep = $5, street = $6, number = $7, neighborhood = $8, city = $9, state = $10, complement = $11,
+			latitude = $12, longitude = $13, has_location = $14
+		WHERE id = $15
+	`, name, initials, primary, background,
+		cep, street, number, neighborhood, city, state, complement,
+		lat, lng, hasLocation, id); err != nil {
 		return models.Market{}, err
 	}
 

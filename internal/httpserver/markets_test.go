@@ -35,7 +35,8 @@ func TestListMarkets_DefaultRadius_ReturnsAllSortedByDistance(t *testing.T) {
 	}
 	require.Equal(t, wantOrder, gotOrder)
 
-	require.InDelta(t, 0.4, results[0].DistanceKm, 0.05)
+	require.NotNil(t, results[0].DistanceKm)
+	require.InDelta(t, 0.4, *results[0].DistanceKm, 0.05)
 	require.Equal(t, "Mercado do Bairro", results[0].Name)
 	require.Equal(t, "MD", results[0].Initials)
 	require.Equal(t, "#1F9E5F", results[0].PrimaryColor)

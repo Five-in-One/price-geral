@@ -106,6 +106,7 @@ func resetToFixture(t *testing.T, pool *pgxpool.Pool) {
 		TRUNCATE TABLE
 			market_products,
 			products,
+			catalog_items,
 			markets
 		RESTART IDENTITY CASCADE
 	`)

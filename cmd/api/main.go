@@ -9,6 +9,7 @@ import (
 
 	"priceback/internal/config"
 	"priceback/internal/db"
+	"priceback/internal/geo"
 	"priceback/internal/httpserver"
 )
 
@@ -26,7 +27,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	router := httpserver.NewRouter(pool)
+	router := httpserver.NewRouter(pool,
+		httpserver.WithGeocoder(geo.NewNominatim("PriceApp/1.0 (projeto-faculdade; price-back)")),
+	)
 
 	log.Printf("price-back listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {

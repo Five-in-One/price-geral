@@ -1,12 +1,15 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,13 +25,13 @@ const (
 	defaultRadiusKm = 5.0
 )
 
-func marketsRouter(pool *pgxpool.Pool) chi.Router {
+func marketsRouter(pool *pgxpool.Pool, geocoder geo.Geocoder) chi.Router {
 	repo := repository.NewMarketsRepo(pool)
 
 	r := chi.NewRouter()
 	r.Get("/", listMarketsHandler(repo))
-	r.Post("/", createMarketHandler(repo))
-	r.Patch("/{id}", updateMarketHandler(repo))
+	r.Post("/", createMarketHandler(repo, geocoder))
+	r.Patch("/{id}", updateMarketHandler(repo, geocoder))
 	r.Delete("/{id}", deleteMarketHandler(repo))
 	r.Post("/{id}/links", addMarketLinkHandler(repo))
 	r.Delete("/{id}/links", removeMarketLinkHandler(repo))
@@ -69,9 +72,18 @@ func listMarketsHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 				continue
 			}
 
+			// A market still on its placeholder location has no meaningful
+			// distance: keep it in the list, without a distance, rather than
+			// hide it or invent a number.
+			if !m.HasLocation {
+				results = append(results, models.MarketWithDistance{Market: m})
+				continue
+			}
+
 			d := geo.HaversineKm(lat, lng, m.Latitude, m.Longitude)
 			if showAll || d <= radiusKm {
-				results = append(results, models.MarketWithDistance{Market: m, DistanceKm: round2(d)})
+				km := round2(d)
+				results = append(results, models.MarketWithDistance{Market: m, DistanceKm: &km})
 			}
 		}
 
@@ -80,8 +92,17 @@ func listMarketsHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 				return results[i].Name < results[j].Name
 			})
 		} else {
-			sort.Slice(results, func(i, j int) bool {
-				return results[i].DistanceKm < results[j].DistanceKm
+			// Nearest first; markets with no known distance go last.
+			sort.SliceStable(results, func(i, j int) bool {
+				a, b := results[i].DistanceKm, results[j].DistanceKm
+				switch {
+				case a == nil:
+					return false
+				case b == nil:
+					return true
+				default:
+					return *a < *b
+				}
 			})
 		}
 
@@ -107,7 +128,7 @@ type createMarketRequest struct {
 	Complement      string   `json:"complement"`
 }
 
-func createMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
+func createMarketHandler(repo *repository.MarketsRepo, geocoder geo.Geocoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		var body createMarketRequest
 		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
@@ -131,11 +152,21 @@ func createMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 		}
 
 		lat, lng := defaultUserLat, defaultUserLng
-		if body.Latitude != nil {
-			lat = *body.Latitude
-		}
-		if body.Longitude != nil {
-			lng = *body.Longitude
+		hasLocation := false
+		if body.Latitude != nil && body.Longitude != nil {
+			lat, lng, hasLocation = *body.Latitude, *body.Longitude, true
+		} else if pt, ok := geocodeAddress(req.Context(), geocoder, name, geo.Address{
+			CEP:          strings.TrimSpace(body.CEP),
+			Street:       strings.TrimSpace(body.Street),
+			Number:       strings.TrimSpace(body.Number),
+			Neighborhood: strings.TrimSpace(body.Neighborhood),
+			City:         strings.TrimSpace(body.City),
+			State:        strings.TrimSpace(body.State),
+		}); ok {
+			// Coordinates weren't sent: derived from the address so the
+			// distance shown to users is real. A failed lookup is not fatal —
+			// the market is still registered, just without a location.
+			lat, lng, hasLocation = pt.Lat, pt.Lng, true
 		}
 
 		initials := body.Initials
@@ -153,6 +184,7 @@ func createMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 			Initials:        initials,
 			Latitude:        lat,
 			Longitude:       lng,
+			HasLocation:     hasLocation,
 			PrimaryColor:    primary,
 			BackgroundColor: background,
 			Source:          source,
@@ -174,14 +206,54 @@ func createMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 	}
 }
 
+// geocodeAddress resolves addr to coordinates, or reports ok=false when
+// there is no geocoder, nothing to look up, or the lookup failed (logged).
+func geocodeAddress(ctx context.Context, geocoder geo.Geocoder, marketName string, addr geo.Address) (geo.Point, bool) {
+	if geocoder == nil || addr.Empty() {
+		return geo.Point{}, false
+	}
+	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+	pt, err := geocoder.Geocode(ctx, addr)
+	if err != nil {
+		log.Printf("geocoding market %q failed: %v", marketName, err)
+		return geo.Point{}, false
+	}
+	return pt, true
+}
+
 type updateMarketRequest struct {
 	Name            *string `json:"name"`
 	Initials        *string `json:"initials"`
 	PrimaryColor    *string `json:"primary_color"`
 	BackgroundColor *string `json:"background_color"`
+	CEP             *string `json:"cep"`
+	Street          *string `json:"street"`
+	Number          *string `json:"number"`
+	Neighborhood    *string `json:"neighborhood"`
+	City            *string `json:"city"`
+	State           *string `json:"state"`
+	Complement      *string `json:"complement"`
 }
 
-func updateMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
+// trimmed returns s with surrounding spaces removed (nil stays nil).
+func trimmed(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	t := strings.TrimSpace(*s)
+	return &t
+}
+
+// orCurrent returns *in when provided, otherwise cur.
+func orCurrent(in *string, cur string) string {
+	if in != nil {
+		return *in
+	}
+	return cur
+}
+
+func updateMarketHandler(repo *repository.MarketsRepo, geocoder geo.Geocoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		id := chi.URLParam(req, "id")
 
@@ -200,12 +272,54 @@ func updateMarketHandler(repo *repository.MarketsRepo) http.HandlerFunc {
 			body.Name = &trimmed
 		}
 
-		market, err := repo.Update(req.Context(), id, repository.UpdateMarketInput{
+		input := repository.UpdateMarketInput{
 			Name:            body.Name,
 			Initials:        body.Initials,
 			PrimaryColor:    body.PrimaryColor,
 			BackgroundColor: body.BackgroundColor,
-		})
+			CEP:             trimmed(body.CEP),
+			Street:          trimmed(body.Street),
+			Number:          trimmed(body.Number),
+			Neighborhood:    trimmed(body.Neighborhood),
+			City:            trimmed(body.City),
+			State:           trimmed(body.State),
+			Complement:      trimmed(body.Complement),
+		}
+
+		// When the address changes, the stored coordinates describe the old
+		// one: look the new one up, and if that fails drop the location
+		// rather than keep a distance that is now wrong.
+		current, err := repo.GetByID(req.Context(), id)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "market not found"})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update market"})
+			return
+		}
+		addr := geo.Address{
+			CEP:          orCurrent(input.CEP, current.CEP),
+			Street:       orCurrent(input.Street, current.Street),
+			Number:       orCurrent(input.Number, current.Number),
+			Neighborhood: orCurrent(input.Neighborhood, current.Neighborhood),
+			City:         orCurrent(input.City, current.City),
+			State:        orCurrent(input.State, current.State),
+		}
+		before := geo.Address{
+			CEP: current.CEP, Street: current.Street, Number: current.Number,
+			Neighborhood: current.Neighborhood, City: current.City, State: current.State,
+		}
+		if addr != before {
+			name := orCurrent(input.Name, current.Name)
+			if pt, ok := geocodeAddress(req.Context(), geocoder, name, addr); ok {
+				input.Location = &repository.LocationUpdate{Latitude: pt.Lat, Longitude: pt.Lng, HasLocation: true}
+			} else {
+				input.Location = &repository.LocationUpdate{Latitude: current.Latitude, Longitude: current.Longitude, HasLocation: false}
+			}
+		}
+
+		market, err := repo.Update(req.Context(), id, input)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "market not found"})
