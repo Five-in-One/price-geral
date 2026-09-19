@@ -72,13 +72,16 @@
   #reloadStatus.error { color: var(--red); }
   #reloadStatus.ok { color: var(--primary); }
 
-  .links-cell { max-width: 220px; }
-  .links-cell .link-line { display: block; font-size: 12px; color: var(--gray); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .links-cell { white-space: nowrap; }
   .muted-note { color: var(--gray-light); font-style: italic; font-size: 12px; }
   .row-actions button.reload { background: var(--primary-bg); color: var(--primary); }
 
   .edit-links-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
   .edit-links-row span { flex: 1; font-size: 12px; color: var(--gray); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Only the link list scrolls (the rest of the modal stays put), so a market with dozens of links stays usable. */
+  #editLinksList { max-height: 220px; overflow-y: auto; padding-right: 4px; }
+  .edit-links-search { width: 100%; margin-bottom: 6px; }
+  #editLinksCount { font-size: 12px; color: var(--gray-light); margin: 0 0 6px; }
   .edit-links-add { display: flex; gap: 6px; margin-top: 6px; }
   .edit-links-add input { flex: 1; }
 
@@ -694,7 +697,7 @@
           <td><span class="swatch" style="background:${m.primary_color}"></span>${escapeHtml(m.primary_color)}</td>
           <td class="links-cell">${
             (m.links && m.links.length > 0)
-              ? m.links.map(l => `<span class="link-line" title="${escapeHtml(l)}">${escapeHtml(l)}</span>`).join("")
+              ? `${m.links.length} ${m.links.length === 1 ? "link" : "links"}`
               : '<span class="muted-note">sem link</span>'
           }</td>
           <td><span class="pill ${m.source}">${sourceLabel[m.source] ?? m.source}</span></td>
@@ -962,7 +965,9 @@
       <div id="editCepStatus"></div>
       <div id="editLocationStatus" class="loc-status"></div>
       <div class="field">
-        <label>Links cadastrados</label>
+        <label for="editLinkSearch">Links cadastrados</label>
+        <input id="editLinkSearch" class="edit-links-search" type="search" placeholder="Pesquisar nos links..." autocomplete="off" oninput="renderEditLinksList()" onkeydown="if (event.key === 'Enter') event.preventDefault();" />
+        <div id="editLinksCount"></div>
         <div id="editLinksList"></div>
         <div class="edit-links-add">
           <input id="editNewLink" type="url" placeholder="https://www.novo-link.com.br" onkeydown="if (event.key === 'Enter') { event.preventDefault(); addEditLink(); }" />
@@ -1011,12 +1016,29 @@
 
   function renderEditLinksList() {
     const list = document.getElementById("editLinksList");
+    const countEl = document.getElementById("editLinksCount");
     const links = editContext?.links || [];
     if (links.length === 0) {
+      countEl.textContent = "";
       list.innerHTML = '<div class="muted-note">Nenhum link cadastrado.</div>';
       return;
     }
-    list.innerHTML = links.map((l, i) => `
+
+    // Filter but keep each link's index in the full list: copy/remove act on that index.
+    const query = (document.getElementById("editLinkSearch")?.value || "").trim().toLowerCase();
+    const visible = links
+      .map((url, index) => ({ url, index }))
+      .filter(({ url }) => !query || url.toLowerCase().includes(query));
+
+    countEl.textContent = query
+      ? `${visible.length} de ${links.length} ${links.length === 1 ? "link" : "links"}`
+      : `${links.length} ${links.length === 1 ? "link" : "links"}`;
+
+    if (visible.length === 0) {
+      list.innerHTML = '<div class="muted-note">Nenhum link encontrado para essa pesquisa.</div>';
+      return;
+    }
+    list.innerHTML = visible.map(({ url: l, index: i }) => `
       <div class="edit-links-row">
         <span title="${escapeHtml(l)}">${escapeHtml(l)}</span>
         ${linkPendingDeleteIndex === i ? `
