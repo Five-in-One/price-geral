@@ -29,7 +29,20 @@ go run ./cmd/api
 ```
 
 Migrations em `migrations/*.sql` aplicam automaticamente na inicialização.
-Sobe em `:8082` por padrão (`PORT` no ambiente para mudar).
+Sobe em `:8082` por padrão.
+
+| Variável | Padrão | Para quê |
+|---|---|---|
+| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/price_user_db?sslmode=disable` | conexão com o Postgres |
+| `PORT` | `8082` | porta HTTP |
+
+Há um `.env.example` com esses valores.
+
+Fora dos testes o banco começa **vazio**: a migration `0002_seed_data.sql` não
+insere mais dados de demonstração. Enquanto não houver histórico real,
+`/api/savings-history` devolve `[]` e `/api/economy/summary` devolve `404`
+(`no economy summary configured`). Os dados de exemplo usados pelos testes
+ficam em `internal/testutil/db.go`.
 
 ## Rodar os testes
 
