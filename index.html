@@ -4,7 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Price — Painel Administrativo</title>
-<link rel="icon" type="image/svg+xml" href="logo-price.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png" />
+<link rel="apple-touch-icon" href="favicon-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -87,7 +89,9 @@
     color: var(--gray); cursor: pointer;
   }
   .icon-btn:hover { background: var(--bg); }
-  .icon-btn.danger { color: var(--red); }
+  /* Must out-rank the generic `button.danger` (solid red) rule below. */
+  .icon-btn.danger { background: #fff; color: var(--red); }
+  .icon-btn.danger:hover { background: #FDE8E8; border-color: #F5B5B5; }
   .icon-btn.confirm { color: #fff; background: var(--red); border-color: var(--red); }
   .icon-btn.cancel { color: var(--gray); }
   #editLinksStatus { font-size: 12px; margin-top: 4px; }
@@ -116,6 +120,12 @@
   }
   tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
   tbody tr:last-child td { border-bottom: none; }
+  /* On phones the wide tables scroll sideways inside themselves instead of
+     stretching the whole page (which also pushed the edit modal off-screen). */
+  @media (max-width: 720px) {
+    table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    main { padding: 16px; }
+  }
 
   .pill {
     display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;
@@ -132,6 +142,19 @@
 
   .empty { color: var(--gray-light); font-size: 13px; padding: 16px; text-align: center; }
 
+  /* Catalog review queue: "are these two listings the same product?" */
+  .sugg { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 14px; margin-bottom: 10px; }
+  .sugg-reason { font-size: 12px; color: #B45309; margin-bottom: 10px; }
+  .sugg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .sugg-col h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--gray-light); }
+  .sugg-col .name { font-weight: 700; font-size: 13px; overflow-wrap: anywhere; }
+  .sugg-col .meta { font-size: 12px; color: var(--gray); margin-top: 3px; }
+  .sugg-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
+  #catalogStatus { font-size: 13px; align-self: center; }
+  #catalogStatus.error { color: var(--red); }
+  #catalogStatus.ok { color: var(--primary); }
+  @media (max-width: 720px) { .sugg-grid { grid-template-columns: 1fr; gap: 10px; } }
+
   .row-actions { display: flex; gap: 6px; white-space: nowrap; }
   .row-actions button {
     padding: 5px 10px; font-size: 12px; font-weight: 600; border-radius: 6px;
@@ -144,12 +167,35 @@
     display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 100;
   }
   .modal-overlay[hidden] { display: none; }
-  .modal { width: 100%; max-width: 380px; background: #fff; }
+  .modal { width: 100%; max-width: 380px; background: #fff; max-height: calc(100vh - 40px); overflow-y: auto; }
+  .modal.wide { max-width: 600px; }
   .modal h3 { margin: 0 0 16px; font-size: 16px; }
   .modal .field { margin-bottom: 12px; }
+  .modal .section-label { font-size: 12px; color: var(--gray); font-weight: 600; margin: 4px 0 8px; }
+
+  /* Address block of the market modal: 6-column grid on desktop, stacked on phones. */
+  .addr-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .addr-grid .field { min-width: 0; margin-bottom: 0; }
+  .addr-grid input { width: 100%; min-width: 0; }
+  .addr-grid .f-cep, .addr-grid .f-number, .addr-grid .f-uf { grid-column: span 2; }
+  .addr-grid .f-street, .addr-grid .f-neigh, .addr-grid .f-city { grid-column: span 4; }
+  .addr-grid .f-comp { grid-column: span 6; }
+  @media (max-width: 520px) {
+    .addr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .addr-grid .field { grid-column: span 2; }
+    .addr-grid .f-cep, .addr-grid .f-number, .addr-grid .f-uf { grid-column: span 1; }
+    .modal-overlay { padding: 12px; }
+  }
+  #editCepStatus { font-size: 12px; margin: -6px 0 10px; }
+  #editCepStatus.error { color: var(--red); }
+  #editCepStatus.ok { color: var(--primary); }
+  .loc-status { font-size: 12px; margin: 0 0 12px; }
+  .loc-status.ok { color: var(--primary); }
+  .loc-status.warn { color: #B45309; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
   #editStatus, #confirmStatus { margin-top: 10px; font-size: 13px; }
   #editStatus.error, #confirmStatus.error { color: var(--red); }
+  #editStatus.warn { color: #B45309; }
   #confirmMessage { font-size: 14px; color: var(--gray); margin: 0; }
 
   /* Login screen — split layout: illustration left, form right */
@@ -405,6 +451,19 @@
       <tbody id="productsBody"></tbody>
     </table>
   </section>
+
+  <section>
+    <h2>Produtos possivelmente iguais <span id="suggestionsCount" class="muted-note"></span></h2>
+    <p class="muted-note" style="margin: -4px 0 12px;">
+      Quando o sistema não tem certeza de que dois cadastros são o mesmo produto, ele pergunta aqui.
+      Os casos óbvios (mesma marca, mesmo tamanho) já são ligados sozinhos.
+    </p>
+    <div id="suggestionsList"></div>
+    <div class="toolbar">
+      <button class="ghost" id="catalogMatchBtn" onclick="runCatalogMatch()">Reprocessar catálogo</button>
+      <span id="catalogStatus"></span>
+    </div>
+  </section>
 </main>
 
 <div class="modal-overlay" id="editOverlay" hidden>
@@ -506,6 +565,7 @@
     document.getElementById("logoutBtn").hidden = false;
     loadMarkets();
     loadProducts();
+    loadSuggestions();
   }
 
   function showLogin() {
@@ -629,7 +689,7 @@
       }
       tbody.innerHTML = markets.map(m => `
         <tr>
-          <td>${escapeHtml(m.name)}</td>
+          <td>${escapeHtml(m.name)}${m.has_location === false ? '<div class="muted-note" title="Sem localização no mapa a distância até o mercado não aparece no app. Edite e confira o endereço.">sem localização</div>' : ''}</td>
           <td>${escapeHtml(m.initials)}</td>
           <td><span class="swatch" style="background:${m.primary_color}"></span>${escapeHtml(m.primary_color)}</td>
           <td class="links-cell">${
@@ -741,6 +801,97 @@
     }
   }
 
+  // --- Catalog review queue -----------------------------------------------------
+
+  const SUGGESTION_REASON = {
+    "brand-missing": "Um dos nomes não traz a marca; o resto é idêntico.",
+    "similar-name": "Os nomes são quase idênticos",
+  };
+
+  async function loadSuggestions() {
+    const list = document.getElementById("suggestionsList");
+    const count = document.getElementById("suggestionsCount");
+    try {
+      const res = await fetch(`${PRICE_BACK_URL}/api/catalog/suggestions`);
+      const suggestions = await res.json();
+      count.textContent = suggestions.length ? `(${suggestions.length} pendente${suggestions.length > 1 ? "s" : ""})` : "";
+      if (suggestions.length === 0) {
+        list.innerHTML = '<div class="empty card">Nada para revisar.</div>';
+        return;
+      }
+      list.innerHTML = suggestions.map(renderSuggestion).join("");
+    } catch (e) {
+      list.innerHTML = '<div class="empty card">Não foi possível carregar as sugestões (price-back está rodando?).</div>';
+    }
+  }
+
+  function renderSuggestion(s) {
+    const reason = SUGGESTION_REASON[s.reason] || s.reason;
+    const score = s.reason === "similar-name" ? ` (${Math.round(s.score * 100)}%)` : "";
+    const size = s.item.size_label ? ` · ${escapeHtml(s.item.size_label)}` : "";
+    const offers = s.item.offers
+      .map(o => `${escapeHtml(o.market_name)} · ${formatBRL(o.price)}`)
+      .join("<br>");
+    return `
+      <div class="sugg" id="sugg-${s.id}">
+        <div class="sugg-reason">${escapeHtml(reason)}${score}</div>
+        <div class="sugg-grid">
+          <div class="sugg-col">
+            <h4>Este cadastro</h4>
+            <div class="name">${escapeHtml(s.product.product_name)}</div>
+            <div class="meta">${escapeHtml(s.product.market_name)} · ${formatBRL(s.product.price)}${size}</div>
+          </div>
+          <div class="sugg-col">
+            <h4>Parece ser o mesmo que</h4>
+            <div class="name">${escapeHtml(s.item.name)}</div>
+            <div class="meta">${offers}</div>
+          </div>
+        </div>
+        <div class="sugg-actions">
+          <button class="ghost" onclick="decideSuggestion(${s.id}, false)">Não são o mesmo</button>
+          <button class="primary" onclick="decideSuggestion(${s.id}, true)">São o mesmo produto</button>
+        </div>
+      </div>`;
+  }
+
+  async function decideSuggestion(id, accept) {
+    const card = document.getElementById(`sugg-${id}`);
+    card?.querySelectorAll("button").forEach(b => (b.disabled = true));
+    try {
+      const res = await fetch(`${PRICE_BACK_URL}/api/catalog/suggestions/${id}/${accept ? "accept" : "reject"}`, { method: "POST" });
+      if (!res.ok && res.status !== 409) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Não foi possível salvar a decisão.");
+      }
+    } catch (e) {
+      alert("Não foi possível falar com o price-back.");
+    }
+    loadSuggestions();
+  }
+
+  async function runCatalogMatch() {
+    const statusEl = document.getElementById("catalogStatus");
+    const btn = document.getElementById("catalogMatchBtn");
+    btn.disabled = true;
+    statusEl.className = "";
+    statusEl.textContent = "Reprocessando...";
+    try {
+      const res = await fetch(`${PRICE_BACK_URL}/api/catalog/match`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      statusEl.className = "ok";
+      statusEl.textContent = data.processed === 0
+        ? "Tudo já estava ligado ao catálogo."
+        : `${data.linked} produtos ligados (${data.items_created} itens novos, ${data.suggestions} para revisar).`;
+      loadSuggestions();
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = "Não foi possível reprocessar o catálogo.";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   // --- Edit / delete ---------------------------------------------------------
 
   let editContext = null; // { type: "market" | "product", id }
@@ -759,8 +910,9 @@
   function openEditMarket(id) {
     const market = lastMarkets.find(m => m.id === id);
     if (!market) return;
-    editContext = { type: "market", id, links: [...(market.links || [])] };
+    editContext = { type: "market", id, links: [...(market.links || [])], address: addressOf(market) };
     linkPendingDeleteIndex = null;
+    document.querySelector("#editOverlay .modal").classList.add("wide");
 
     document.getElementById("editTitle").textContent = "Editar mercado";
     document.getElementById("editFields").innerHTML = `
@@ -776,6 +928,39 @@
         <label for="editPrimaryColor">Cor</label>
         <input id="editPrimaryColor" type="color" value="${market.primary_color}" />
       </div>
+      <div class="section-label">Endereço</div>
+      <div class="addr-grid">
+        <div class="field f-cep">
+          <label for="editCep">CEP</label>
+          <input id="editCep" type="text" placeholder="64000-000" maxlength="9" inputmode="numeric" value="${escapeHtml(market.cep)}" oninput="handleCepInput(this, 'edit', 'editCepStatus')" />
+        </div>
+        <div class="field f-street">
+          <label for="editStreet">Logradouro</label>
+          <input id="editStreet" type="text" placeholder="Rua / Av." value="${escapeHtml(market.street)}" />
+        </div>
+        <div class="field f-number">
+          <label for="editNumber">Número</label>
+          <input id="editNumber" type="text" placeholder="123" value="${escapeHtml(market.number)}" />
+        </div>
+        <div class="field f-neigh">
+          <label for="editNeighborhood">Bairro</label>
+          <input id="editNeighborhood" type="text" placeholder="Bairro" value="${escapeHtml(market.neighborhood)}" />
+        </div>
+        <div class="field f-city">
+          <label for="editCity">Cidade</label>
+          <input id="editCity" type="text" placeholder="Cidade" value="${escapeHtml(market.city)}" />
+        </div>
+        <div class="field f-uf">
+          <label for="editState">UF</label>
+          <input id="editState" type="text" placeholder="PI" maxlength="2" style="text-transform: uppercase;" value="${escapeHtml(market.state)}" />
+        </div>
+        <div class="field f-comp">
+          <label for="editComplement">Complemento</label>
+          <input id="editComplement" type="text" placeholder="Loja, sala, referência..." value="${escapeHtml(market.complement)}" />
+        </div>
+      </div>
+      <div id="editCepStatus"></div>
+      <div id="editLocationStatus" class="loc-status"></div>
       <div class="field">
         <label>Links cadastrados</label>
         <div id="editLinksList"></div>
@@ -787,8 +972,41 @@
       </div>
     `;
     renderEditLinksList();
+    renderLocationStatus(market.has_location);
     document.getElementById("editStatus").textContent = "";
     document.getElementById("editOverlay").hidden = false;
+  }
+
+  const ADDRESS_FIELDS = [
+    ["cep", "editCep"], ["street", "editStreet"], ["number", "editNumber"],
+    ["neighborhood", "editNeighborhood"], ["city", "editCity"], ["state", "editState"],
+    ["complement", "editComplement"],
+  ];
+
+  // Address fields of a market as the API returns them (missing ones are "").
+  function addressOf(market) {
+    const out = {};
+    for (const [key] of ADDRESS_FIELDS) out[key] = market[key] || "";
+    return out;
+  }
+
+  function readAddressFromForm() {
+    const out = {};
+    for (const [key, id] of ADDRESS_FIELDS) out[key] = document.getElementById(id).value.trim();
+    out.state = out.state.toUpperCase();
+    return out;
+  }
+
+  function renderLocationStatus(hasLocation) {
+    const el = document.getElementById("editLocationStatus");
+    if (!el) return;
+    if (hasLocation) {
+      el.className = "loc-status ok";
+      el.textContent = "Localização no mapa: encontrada — a distância até este mercado aparece no app.";
+    } else {
+      el.className = "loc-status warn";
+      el.textContent = "Localização no mapa: não encontrada — informe um endereço válido para a distância aparecer no app.";
+    }
   }
 
   function renderEditLinksList() {
@@ -901,6 +1119,7 @@
     const product = lastProducts.find(p => p.id === id);
     if (!product) return;
     editContext = { type: "product", id };
+    document.querySelector("#editOverlay .modal").classList.remove("wide");
 
     document.getElementById("editTitle").textContent = "Editar produto";
     document.getElementById("editFields").innerHTML = `
@@ -943,7 +1162,10 @@
         name: document.getElementById("editName").value.trim(),
         initials: document.getElementById("editInitials").value.trim(),
         primary_color: document.getElementById("editPrimaryColor").value,
+        ...readAddressFromForm(),
       };
+      const addressChanged = JSON.stringify(addressOf(body)) !== JSON.stringify(editContext.address);
+      if (addressChanged) statusEl.textContent = "Salvando e localizando o endereço no mapa... pode levar alguns segundos.";
     } else {
       path = `/api/products/${editContext.id}`;
       body = {
@@ -966,6 +1188,19 @@
         statusEl.className = "error";
         statusEl.textContent = data.error || "Não foi possível salvar.";
         return;
+      }
+      if (editContext.type === "market") {
+        const addressChanged = JSON.stringify(addressOf(data)) !== JSON.stringify(editContext.address);
+        editContext.address = addressOf(data);
+        renderLocationStatus(data.has_location);
+        loadMarkets();
+        // Keep the modal open when a changed address could not be located, so
+        // it can be fixed right away instead of silently losing the distance.
+        if (addressChanged && data.has_location === false) {
+          statusEl.className = "warn";
+          statusEl.textContent = "Salvo, mas não foi possível localizar esse endereço no mapa. Confira o endereço.";
+          return;
+        }
       }
       closeEdit();
       loadMarkets();
@@ -1050,14 +1285,16 @@
 
   let cepLookupToken = 0;
 
-  function handleCepInput(input) {
+  // `prefix` selects which form to fill: "collect" (Coleta sob demanda) or
+  // "edit" (market modal) — fields are `${prefix}Street`, `${prefix}City`, ...
+  function handleCepInput(input, prefix = "collect", statusId = "cepStatus") {
     const digits = input.value.replace(/\D/g, "").slice(0, 8);
     input.value = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
-    if (digits.length === 8) lookupCep(digits);
+    if (digits.length === 8) lookupCep(digits, prefix, statusId);
   }
 
-  async function lookupCep(cep) {
-    const statusEl = document.getElementById("cepStatus");
+  async function lookupCep(cep, prefix, statusId) {
+    const statusEl = document.getElementById(statusId);
     const token = ++cepLookupToken;
     statusEl.className = "";
     statusEl.textContent = "Buscando endereço...";
@@ -1073,10 +1310,10 @@
         return;
       }
 
-      document.getElementById("collectStreet").value = data.logradouro || "";
-      document.getElementById("collectNeighborhood").value = data.bairro || "";
-      document.getElementById("collectCity").value = data.localidade || "";
-      document.getElementById("collectState").value = data.uf || "";
+      document.getElementById(`${prefix}Street`).value = data.logradouro || "";
+      document.getElementById(`${prefix}Neighborhood`).value = data.bairro || "";
+      document.getElementById(`${prefix}City`).value = data.localidade || "";
+      document.getElementById(`${prefix}State`).value = data.uf || "";
       statusEl.className = "ok";
       statusEl.textContent = "Endereço preenchido a partir do CEP.";
     } catch (e) {
