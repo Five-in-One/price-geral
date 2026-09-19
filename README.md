@@ -53,9 +53,10 @@ go test ./...
 |---|---|---|
 | GET | `/health` | healthcheck |
 | POST | `/auth/register` | `{username,password}` → cria a conta como `role: "company"` e retorna `access_token` + usuário |
+| POST | `/auth/signup` | `{username,password}` → cria a conta como `role: "user"` (quem usa o app) e retorna `access_token` + usuário. É o cadastro do app Flutter |
 | POST | `/auth/login` | `{username,password}` → retorna `access_token` + usuário (com `role`) |
 | GET | `/auth/me` | `Authorization: Bearer <token>` → retorna o usuário autenticado |
-| POST | `/auth/admin/users` | **admin only** — `{username,password,role}` → cria uma conta com o `role` pedido (`admin` ou `company`) |
+| POST | `/auth/admin/users` | **admin only** — `{username,password,role}` → cria uma conta com o `role` pedido (`admin`, `company` ou `user`) |
 
 `username` é normalizado para minúsculas e precisa ter entre 3 e 32
 caracteres, sem espaços. O token é um JWT HS256 (`user_id`, `username`,
@@ -65,10 +66,11 @@ esta API.
 
 ## Roles
 
-Só existem duas: `admin` (equipe interna, usa o Painel Administrativo) e
-`company` (empresa parceira, usa a Página da Empresa). Ninguém vira `admin`
-se autocadastrando — `/auth/register` sempre cria `company`, ignorando
-qualquer `role` enviada no corpo. A única forma de criar uma conta `admin`
+Existem três: `admin` (equipe interna, usa o Painel Administrativo),
+`company` (empresa parceira, usa a Página da Empresa) e `user` (pessoa que
+usa o app; guarda listas de compras no `price-user`). Ninguém vira `admin`
+se autocadastrando — `/auth/register` sempre cria `company` e `/auth/signup`
+sempre cria `user`, ignorando qualquer `role` enviada no corpo. A única forma de criar uma conta `admin`
 é outro admin chamar `POST /auth/admin/users`.
 
 Para existir um primeiro admin, a migration `0003_seed_admin.sql` já cria:
