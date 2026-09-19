@@ -42,6 +42,11 @@ O botão "Editar" de um mercado abre um modal com nome, iniciais, cor, **endere�
 (CEP, logradouro, número, bairro, cidade, UF e complemento) e os links do site.
 Digitar o CEP preenche o resto pelo ViaCEP.
 
+Na tabela de mercados a coluna "Links" mostra só a quantidade ("60 links"). As
+URLs ficam no modal, numa lista com rolagem própria e um campo "Pesquisar nos
+links..." que filtra sem diferenciar maiúsculas de minúsculas ("11 de 60 links");
+copiar e remover continuam valendo para o link certo mesmo com a lista filtrada.
+
 Ao salvar com o endereço alterado, o `price-back` localiza o novo endereço no
 mapa (é o que faz a distância aparecer no app). O modal mostra a situação —
 "Localização no mapa: encontrada / não encontrada" — e, se o endereço novo não
