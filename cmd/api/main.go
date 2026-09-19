@@ -27,8 +27,11 @@ func main() {
 	}
 	defer pool.Close()
 
+	// One client for both directions, so they share Nominatim's rate limit.
+	nominatim := geo.NewNominatim("PriceApp/1.0 (projeto-faculdade; price-back)")
 	router := httpserver.NewRouter(pool,
-		httpserver.WithGeocoder(geo.NewNominatim("PriceApp/1.0 (projeto-faculdade; price-back)")),
+		httpserver.WithGeocoder(nominatim),
+		httpserver.WithReverseGeocoder(nominatim),
 	)
 
 	log.Printf("price-back listening on :%s", cfg.Port)

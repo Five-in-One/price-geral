@@ -136,3 +136,66 @@ func TestAddress_Empty(t *testing.T) {
 		t.Fatal("a CEP is enough to try geocoding")
 	}
 }
+
+func TestNominatim_Reverse_MapsAddressPieces(t *testing.T) {
+	var gotPath, gotLat, gotLon, gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotLat, gotLon, gotUA = r.URL.Path, r.URL.Query().Get("lat"), r.URL.Query().Get("lon"), r.Header.Get("User-Agent")
+		_, _ = w.Write([]byte(`{"address":{"road":"Avenida Homero Castelo Branco","suburb":"Jóquei","city":"Teresina","state":"Piauí","ISO3166-2-lvl4":"BR-PI","postcode":"64049-000"}}`))
+	}))
+	defer srv.Close()
+
+	place, err := newTestNominatim(srv.URL).Reverse(context.Background(), Point{Lat: -5.0802, Lng: -42.81})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPath != "/reverse" || gotLat != "-5.0802" || gotLon != "-42.81" || gotUA != "PriceApp-test" {
+		t.Fatalf("unexpected request: path=%q lat=%q lon=%q ua=%q", gotPath, gotLat, gotLon, gotUA)
+	}
+	want := Place{Street: "Avenida Homero Castelo Branco", Neighborhood: "Jóquei", City: "Teresina", State: "PI", CEP: "64049-000"}
+	if place != want {
+		t.Fatalf("got %+v, want %+v", place, want)
+	}
+	if got := place.Label(); got != "Avenida Homero Castelo Branco, Jóquei, Teresina - PI" {
+		t.Fatalf("unexpected label %q", got)
+	}
+}
+
+func TestNominatim_Reverse_FallsBackToTownAndStateName(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"address":{"town":"Altos","state":"Piauí"}}`))
+	}))
+	defer srv.Close()
+
+	place, err := newTestNominatim(srv.URL).Reverse(context.Background(), Point{Lat: -5.03, Lng: -42.46})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := place.Label(); got != "Altos - Piauí" {
+		t.Fatalf("unexpected label %q", got)
+	}
+}
+
+func TestNominatim_Reverse_NothingThere_ReturnsNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"error":"Unable to geocode"}`))
+	}))
+	defer srv.Close()
+
+	_, err := newTestNominatim(srv.URL).Reverse(context.Background(), Point{Lat: 0, Lng: 0})
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestNominatim_Reverse_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	_, err := newTestNominatim(srv.URL).Reverse(context.Background(), Point{Lat: -5, Lng: -42})
+	if err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected a non-NotFound error, got %v", err)
+	}
+}

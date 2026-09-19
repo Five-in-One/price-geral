@@ -14,6 +14,7 @@ type Option func(*routerConfig)
 
 type routerConfig struct {
 	geocoder geo.Geocoder
+	reverse  geo.ReverseGeocoder
 }
 
 // WithGeocoder turns on address geocoding: markets registered with an
@@ -22,6 +23,12 @@ type routerConfig struct {
 // the placeholder location and no distance is computed for them.
 func WithGeocoder(g geo.Geocoder) Option {
 	return func(c *routerConfig) { c.geocoder = g }
+}
+
+// WithReverseGeocoder turns on GET /api/geocode/reverse, which the app uses to
+// show the address of the device's position. Without it that route answers 503.
+func WithReverseGeocoder(g geo.ReverseGeocoder) Option {
+	return func(c *routerConfig) { c.reverse = g }
 }
 
 // NewRouter builds the full HTTP router for the API, wiring every route
@@ -53,6 +60,7 @@ func NewRouter(pool *pgxpool.Pool, opts ...Option) *chi.Mux {
 		api.Mount("/products", productsRouter(pool))
 		api.Mount("/comparisons", comparisonsRouter(pool))
 		api.Mount("/catalog", catalogRouter(pool))
+		api.Mount("/geocode", geocodeRouter(cfg.reverse))
 	})
 
 	return r
