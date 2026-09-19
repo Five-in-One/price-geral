@@ -50,6 +50,20 @@ Painel Admin.
 python -m nextprice.collect_api   # sobe em :8085
 ```
 
+Ao enviar cada produto, a coleta também manda o que `src/nextprice/product_parser.py`
+extrai do nome (marca, tamanho da embalagem em g/ml/m, quantidade, chave genérica
+para comparar marcas diferentes) e o horário da coleta (`collected_at`). Banners de
+vitrine ("↪️ Atacado SUPER!") são descartados antes do envio. Marcas novas se ensinam
+em `src/nextprice/data/brands.txt` (só marcas, não linhas de produto). Quem usa esses
+campos para reconhecer o mesmo produto em mercados diferentes é o catálogo canônico do
+`price-back` (veja `../price-back/README.md`): quanto melhor o parser lê marca e tamanho,
+mais produtos entram no catálogo sozinhos.
+
+```bash
+python scripts/eval_product_parser.py --misses    # mede o parser em tests/data/nomes_reais.txt
+python scripts/backfill_parsed_fields.py          # preenche os campos em produtos já cadastrados
+```
+
 Requer `price-back` rodando em `:8080` (ou `PRICE_BACK_URL` apontando para
 onde ele estiver) e uma `GEMINI_API_KEY` válida — sem uma chave real, a
 coleta roda até o passo da IA e retorna `products_extracted: 0` em vez de
@@ -107,6 +121,9 @@ NextPrice/
 | `src/nextprice/storage.py` | Deduplicação/escrita dos arquivos JSON e inserção no Postgres |
 | `src/nextprice/geo.py` | Detecção da localização do usuário |
 | `src/nextprice/browser.py` | Automação de navegador com Playwright |
+| `src/nextprice/product_parser.py` | Extrai marca, tamanho (g/ml/m), quantidade e chave genérica do nome do produto; calcula o preço por kg/L/m/un |
+| `src/nextprice/data/brands.txt` | Lista de marcas conhecidas usada pelo parser (uma por linha) |
+| `scripts/` | `eval_product_parser.py` (mede o parser) e `backfill_parsed_fields.py` (preenche produtos antigos) |
 | `src/nextprice/stores/` | Configuração declarativa de cada loja suportada |
 | `src/nextprice/ai/` | Montagem de prompt e cliente do Gemini |
 | `src/nextprice/cli/main.py` | Parser de comandos e roteamento (`extract`/`track`) |
