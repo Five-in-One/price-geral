@@ -1,10 +1,10 @@
 # price-user
 
-API de Registro de Usuário do Price (Go + chi + pgx) — histórico do
-usuário (comparações passadas, resumo de economia). Separada da API de
-Produtos e Preços (`price-back`) e da API de Autenticação (`price-auth`).
-Cadastro de conta, perfil e favoritos ainda não existem aqui — hoje o
-serviço só serve os dados de economia que o front já consumia.
+API de Registro de Usuário do Price (Go + chi + pgx) — o que pertence a cada
+pessoa: as listas de compras que ela salvou e o histórico (comparações
+passadas, resumo de economia). Separada da API de Produtos e Preços
+(`price-back`) e da API de Autenticação (`price-auth`), que emite os tokens
+que este serviço valida. Perfil e favoritos ainda não existem aqui.
 
 ## Banco de dados
 
@@ -35,6 +35,7 @@ Sobe em `:8082` por padrão.
 |---|---|---|
 | `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/price_user_db?sslmode=disable` | conexão com o Postgres |
 | `PORT` | `8082` | porta HTTP |
+| `JWT_SECRET` | `dev-secret-change-me` | segredo que assina os tokens do `price-auth` — **precisa ser o mesmo valor** do `price-auth`, senão as rotas de listas salvas respondem `401` |
 
 Há um `.env.example` com esses valores.
 
@@ -59,3 +60,18 @@ go test ./...
 | GET | `/health` | healthcheck |
 | GET | `/api/savings-history` | histórico de comparações/economias |
 | GET | `/api/economy/summary` | totais do mês + série mensal do gráfico |
+| GET | `/api/shopping-lists` | **login** — as listas salvas de quem está logado, da mais recente para a mais antiga |
+| POST | `/api/shopping-lists` | **login** — `{name, items:[{product:{…}, quantity}]}` salva a lista. Se a pessoa já tem uma lista com esse nome (sem diferenciar maiúsculas), ela é substituída (`200`); senão é criada (`201`) |
+| DELETE | `/api/shopping-lists/{id}` | **login** — apaga uma lista da própria pessoa (`204`; a de outra pessoa dá `404`) |
+
+## Listas salvas
+
+As rotas de `/api/shopping-lists` exigem `Authorization: Bearer <token>` com um
+token emitido pelo `price-auth` (`/auth/signup` ou `/auth/login`); o serviço o
+valida localmente com o `JWT_SECRET` e usa o `user_id` do token — cada pessoa só
+enxerga e apaga as próprias listas. Os itens ficam guardados exatamente como o
+app os enviou (uma cópia do produto + a quantidade), então uma lista salva
+recupera os preços da época em que foi salva; a comparação entre mercados é
+sempre recalculada pelo `price-back` na hora. Limites: nome de 1 a 60
+caracteres, 1 a 200 itens por lista e 50 listas por pessoa (`409` ao passar).
+Rotas de economia/histórico continuam abertas, como antes.
