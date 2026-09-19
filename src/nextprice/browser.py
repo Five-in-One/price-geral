@@ -16,9 +16,20 @@ logger = logging.getLogger(__name__)
 # produto de verdade — não dá pra distinguir só pelo seletor. Na prática,
 # produtos de mercearia raspados aqui nunca têm emoji no nome; banners
 # promocionais quase sempre têm. Cobre os blocos Unicode de emoji mais
-# comuns (pictográficos, símbolos diversos/dingbats, bandeiras).
+# comuns (pictográficos, símbolos diversos/dingbats, bandeiras) e também
+# setas e formas geométricas ("↪️ Atacado SUPER!" passou porque a seta ↪ não
+# está nos blocos de emoji), além do seletor de variação U+FE0F.
 _EMOJI_PATTERN = re.compile(
-    "[" "\U0001f300-\U0001faff" "\U00002600-\U000027bf" "\U0001f1e6-\U0001f1ff" "]"
+    "["
+    "\U0001f300-\U0001faff"
+    "\U00002600-\U000027bf"
+    "\U0001f1e6-\U0001f1ff"
+    "\U00002190-\U000021ff"  # setas
+    "\U00002300-\U000023ff"  # símbolos técnicos (⌚ ⏰ ...)
+    "\U000025a0-\U000025ff"  # formas geométricas
+    "\U00002b00-\U00002bff"  # setas/símbolos suplementares
+    "\U0000fe0f"  # seletor de variação de emoji
+    "]"
 )
 
 # Nem todo banner tem emoji ("Ofertas do dia", "Mais Vendidos", "Peso
@@ -44,7 +55,7 @@ _BANNER_KEYWORDS = (
 )
 
 
-def _looks_like_banner(nome: str) -> bool:
+def looks_like_banner(nome: str) -> bool:
     """Heurística para filtrar banners/rótulos de vitrine capturados junto
     com produtos de verdade pelo mesmo seletor CSS — por emoji
     (_EMOJI_PATTERN) ou por frase típica de banner (_BANNER_KEYWORDS)."""
@@ -87,7 +98,7 @@ def scrape_listing(page: Page, store: StoreConfig) -> list[dict]:
 
             if len(nome) <= 3 or nome == preco:
                 continue
-            if _looks_like_banner(nome):
+            if looks_like_banner(nome):
                 continue
             nome_lower = nome.lower()
             if any(termo in nome_lower for termo in store.exclude_name_substrings):
@@ -135,7 +146,7 @@ def collect_listing_text_blocks(page: Page, url: str, max_block_len: int = 300) 
                 "R$" in texto
                 and 0 < len(texto) < max_block_len
                 and texto not in blocos
-                and not _looks_like_banner(texto)
+                and not looks_like_banner(texto)
             ):
                 blocos.append(texto)
         except Exception:

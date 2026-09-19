@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -19,9 +20,15 @@ from pydantic import BaseModel, Field
 
 from nextprice import db, storage
 from nextprice.ai.client import GeminiClient
-from nextprice.browser import collect_listing_text_blocks, scrape_listing, scroll_to_load
+from nextprice.browser import (
+    collect_listing_text_blocks,
+    looks_like_banner,
+    scrape_listing,
+    scroll_to_load,
+)
 from nextprice.categorize import classify_by_keywords, guess_unit
 from nextprice.pricing import parse_price_brl
+from nextprice.product_parser import parse_product_name, price_back_fields
 from nextprice.stores.base import StoreConfig
 from nextprice.stores.registry import find_store_by_url
 
@@ -216,11 +223,16 @@ def register_market(payload: CollectRequest, client: httpx.Client | None = None)
 
 
 def push_to_price_back(
-    market_name: str, produtos_validos: list[dict], client: httpx.Client | None = None
+    market_name: str,
+    produtos_validos: list[dict],
+    client: httpx.Client | None = None,
+    collected_at: str | None = None,
 ) -> list[dict]:
     """Sends each AI-classified product to price-back's
-    POST /api/products, tagged source=bot. Returns the ones price-back
-    accepted (as the JSON it returned).
+    POST /api/products, tagged source=bot, together with what
+    nextprice.product_parser extracts from its name (brand, package size,
+    generic key...) and the time the price was collected. Returns the ones
+    price-back accepted (as the JSON it returned).
 
     Accepts an injected `client` for tests (e.g. one built with
     httpx.MockTransport); a real client is opened/closed automatically
@@ -234,17 +246,18 @@ def push_to_price_back(
     try:
         for item in produtos_validos:
             try:
-                resp = client.post(
-                    f"{PRICE_BACK_URL}/api/products",
-                    json={
-                        "name": item["nome"],
-                        "unit": item.get("unidade") or "un",
-                        "category": item.get("categoria") or "OUTROS",
-                        "price": item["preco_numerico"],
-                        "market_name": market_name,
-                        "source": "bot",
-                    },
-                )
+                body = {
+                    "name": item["nome"],
+                    "unit": item.get("unidade") or "un",
+                    "category": item.get("categoria") or "OUTROS",
+                    "price": item["preco_numerico"],
+                    "market_name": market_name,
+                    "source": "bot",
+                    **price_back_fields(parse_product_name(item["nome"])),
+                }
+                if collected_at:
+                    body["collected_at"] = collected_at
+                resp = client.post(f"{PRICE_BACK_URL}/api/products", json=body)
                 if resp.status_code == 201:
                     inserted.append(resp.json())
                 else:
@@ -305,6 +318,17 @@ def collect(payload: CollectRequest) -> CollectResponse:
             "[%s] IA reconheceu %d produtos a partir dos blocos.", payload.market_name, len(produtos)
         )
 
+    # Vitrine banners ("↪️ Atacado SUPER!") come through the same selectors and,
+    # for unknown stores, through the AI too — never register them as products.
+    reais = [p for p in produtos if not looks_like_banner(p.get("nome", ""))]
+    if len(reais) < len(produtos):
+        logger.info(
+            "[%s] %d banners/rótulos de vitrine descartados.",
+            payload.market_name,
+            len(produtos) - len(reais),
+        )
+    produtos = reais
+
     validos = []
     for item in produtos:
         try:
@@ -320,7 +344,8 @@ def collect(payload: CollectRequest) -> CollectResponse:
         )
 
     save_raw_scrape(payload.market_name, payload.url, produtos)
-    inserted = push_to_price_back(payload.market_name, validos)
+    collected_at = datetime.now(timezone.utc).isoformat()
+    inserted = push_to_price_back(payload.market_name, validos, collected_at=collected_at)
 
     logger.info(
         "[%s] Coleta concluída: %d encontrados, %d extraídos, %d inseridos em price-back.",
