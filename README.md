@@ -33,3 +33,39 @@ Ou via `.claude/launch.json` na raiz do projeto. Acesse
 Usuário: `admin` — senha: `TrocarSenha123!` (conta seedada pela migration
 `0003_seed_admin.sql` do `price-auth`). Troque essa senha ou crie outro
 admin antes de qualquer uso além de desenvolvimento local.
+
+## Telas
+
+### Editar mercado (endereço)
+
+O botão "Editar" de um mercado abre um modal com nome, iniciais, cor, **endereço**
+(CEP, logradouro, número, bairro, cidade, UF e complemento) e os links do site.
+Digitar o CEP preenche o resto pelo ViaCEP.
+
+Ao salvar com o endereço alterado, o `price-back` localiza o novo endereço no
+mapa (é o que faz a distância aparecer no app). O modal mostra a situação —
+"Localização no mapa: encontrada / não encontrada" — e, se o endereço novo não
+puder ser localizado, avisa e **continua aberto** para você corrigir. Mercados
+sem localização aparecem na tabela com a marca "sem localização" e não mostram
+distância no app.
+
+O modal é responsivo: em telas estreitas os campos empilham e o conteúdo rola
+por dentro, e as tabelas rolam na horizontal em vez de alargar a página.
+
+### Produtos possivelmente iguais
+
+Seção no fim da página, alimentada pela fila de revisão do catálogo canônico
+(`GET /api/catalog/suggestions` do `price-back`). Cada cartão mostra o cadastro
+duvidoso ao lado do item do catálogo com o qual ele pode ser o mesmo produto —
+com mercado e preço de cada lado — e o motivo da dúvida (falta a marca num dos
+nomes, ou nomes quase idênticos).
+
+- **São o mesmo produto**: junta os dois no catálogo e trava a decisão (uma nova
+  coleta não a desfaz).
+- **Não são o mesmo**: o par nunca mais é sugerido.
+- **Reprocessar catálogo**: liga ao catálogo os produtos que ainda não estão
+  nele (`POST /api/catalog/match`). É seguro repetir.
+
+Só casos duvidosos chegam aqui; produtos com a mesma marca, o mesmo nome e o
+mesmo tamanho já são ligados automaticamente. Como o catálogo funciona:
+`../price-back/README.md`, seção "Catálogo canônico".
