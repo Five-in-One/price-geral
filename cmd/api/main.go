@@ -26,7 +26,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	router := httpserver.NewRouter(pool)
+	router := httpserver.NewRouter(pool, cfg.JWTSecret)
 
 	log.Printf("price-user listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {

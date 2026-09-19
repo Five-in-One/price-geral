@@ -15,7 +15,7 @@ import (
 
 func TestEconomySummary_ReturnsSeededTotalsAndChart(t *testing.T) {
 	pool := testutil.NewTestPool(t)
-	router := httpserver.NewRouter(pool)
+	router := httpserver.NewRouter(pool, "test-secret")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/economy/summary", nil)
 	rec := httptest.NewRecorder()

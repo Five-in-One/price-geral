@@ -80,7 +80,8 @@ func resetToFixture(t *testing.T, pool *pgxpool.Pool) {
 		TRUNCATE TABLE
 			savings_history,
 			monthly_savings,
-			economy_summary
+			economy_summary,
+			shopping_lists
 		RESTART IDENTITY CASCADE
 	`)
 	if err != nil {

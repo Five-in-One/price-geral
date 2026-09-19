@@ -14,7 +14,7 @@ import (
 
 func TestHealth_ReturnsOKWhenDatabaseReachable(t *testing.T) {
 	pool := testutil.NewTestPool(t)
-	router := httpserver.NewRouter(pool)
+	router := httpserver.NewRouter(pool, "test-secret")
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
