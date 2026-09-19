@@ -23,7 +23,18 @@ type credentialsRequest struct {
 	Password string `json:"password"`
 }
 
+// registerHandler is the public self-registration route for partner
+// companies; signupHandler is the one the mobile app uses for end users.
+// Both are public, so neither honors a role sent in the body.
 func registerHandler(repo *repository.UsersRepo, jwtSecret string) http.HandlerFunc {
+	return selfRegisterHandler(repo, jwtSecret, models.RoleCompany)
+}
+
+func signupHandler(repo *repository.UsersRepo, jwtSecret string) http.HandlerFunc {
+	return selfRegisterHandler(repo, jwtSecret, models.RoleUser)
+}
+
+func selfRegisterHandler(repo *repository.UsersRepo, jwtSecret string, role models.Role) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body credentialsRequest
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -47,10 +58,9 @@ func registerHandler(repo *repository.UsersRepo, jwtSecret string) http.HandlerF
 			return
 		}
 
-		// Public self-registration always creates a "company" account —
-		// admin accounts can only be created by an existing admin, via
-		// POST /auth/admin/users.
-		user, err := repo.Create(r.Context(), username, hash, models.RoleCompany)
+		// Public self-registration never creates an "admin" account — those
+		// can only be created by an existing admin, via POST /auth/admin/users.
+		user, err := repo.Create(r.Context(), username, hash, role)
 		if err != nil {
 			if errors.Is(err, repository.ErrUsernameTaken) {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "username already taken"})
@@ -122,9 +132,9 @@ type createUserRequest struct {
 }
 
 // createUserHandler lets an authenticated admin create another account —
-// with either role. This is the only way an "admin" account can come into
+// with any role. This is the only way an "admin" account can come into
 // existence besides the seeded bootstrap user; public self-registration
-// (registerHandler) always creates "company" accounts.
+// creates "company" (registerHandler) or "user" (signupHandler) accounts.
 func createUserHandler(repo *repository.UsersRepo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body createUserRequest
@@ -143,7 +153,7 @@ func createUserHandler(repo *repository.UsersRepo) http.HandlerFunc {
 			return
 		}
 		if !body.Role.IsValid() {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be 'admin' or 'company'"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "role must be 'admin', 'company' or 'user'"})
 			return
 		}
 

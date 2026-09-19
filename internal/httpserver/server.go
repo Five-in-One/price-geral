@@ -30,6 +30,7 @@ func NewRouter(pool *pgxpool.Pool, jwtSecret string) *chi.Mux {
 
 	r.Route("/auth", func(auth chi.Router) {
 		auth.Post("/register", registerHandler(usersRepo, jwtSecret))
+		auth.Post("/signup", signupHandler(usersRepo, jwtSecret))
 		auth.Post("/login", loginHandler(usersRepo, jwtSecret))
 
 		auth.Group(func(protected chi.Router) {

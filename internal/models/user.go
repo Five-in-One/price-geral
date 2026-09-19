@@ -2,17 +2,19 @@ package models
 
 import "time"
 
-// Role distinguishes internal Price staff from partner markets.
+// Role distinguishes internal Price staff, partner markets and the people
+// who use the mobile app.
 type Role string
 
 const (
 	RoleAdmin   Role = "admin"
 	RoleCompany Role = "company"
+	RoleUser    Role = "user"
 )
 
 // IsValid reports whether r is one of the known roles.
 func (r Role) IsValid() bool {
-	return r == RoleAdmin || r == RoleCompany
+	return r == RoleAdmin || r == RoleCompany || r == RoleUser
 }
 
 // User is the public-facing representation of an account — never carries

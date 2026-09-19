@@ -338,3 +338,69 @@ func TestMe_TokenSignedWithDifferentSecret_ReturnsUnauthorized(t *testing.T) {
 	rec := doJSONRequest(t, router, http.MethodGet, "/auth/me", nil, registered.AccessToken)
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 }
+
+func TestSignup_CreatesUserRoleAccount(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool, "test-secret")
+
+	rec := doJSONRequest(t, router, http.MethodPost, "/auth/signup", map[string]string{
+		"username": "Maria", "password": "correct-horse",
+	}, "")
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	var resp models.AuthResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotEmpty(t, resp.AccessToken)
+	require.Equal(t, "maria", resp.User.Username)
+	require.Equal(t, models.RoleUser, resp.User.Role)
+
+	// The token works against /auth/me and can log in again later.
+	me := doJSONRequest(t, router, http.MethodGet, "/auth/me", nil, resp.AccessToken)
+	require.Equal(t, http.StatusOK, me.Code)
+	login := doJSONRequest(t, router, http.MethodPost, "/auth/login", map[string]string{
+		"username": "maria", "password": "correct-horse",
+	}, "")
+	require.Equal(t, http.StatusOK, login.Code)
+}
+
+func TestSignup_IgnoresRoleInBody(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool, "test-secret")
+
+	rec := doJSONRequest(t, router, http.MethodPost, "/auth/signup", map[string]string{
+		"username": "sneaky", "password": "correct-horse", "role": "admin",
+	}, "")
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var resp models.AuthResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, models.RoleUser, resp.User.Role)
+}
+
+func TestSignup_DuplicateUsernameAndWeakPassword(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool, "test-secret")
+
+	body := map[string]string{"username": "joao", "password": "correct-horse"}
+	require.Equal(t, http.StatusCreated, doJSONRequest(t, router, http.MethodPost, "/auth/signup", body, "").Code)
+	require.Equal(t, http.StatusConflict, doJSONRequest(t, router, http.MethodPost, "/auth/signup", body, "").Code)
+
+	short := doJSONRequest(t, router, http.MethodPost, "/auth/signup", map[string]string{"username": "ana", "password": "1234"}, "")
+	require.Equal(t, http.StatusBadRequest, short.Code)
+}
+
+func TestCreateUser_AsAdmin_CanCreateUserRoleAccount(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool, "test-secret")
+	adminToken := loginAsSeededAdmin(t, router)
+
+	rec := doJSONRequest(t, router, http.MethodPost, "/auth/admin/users", map[string]string{
+		"username": "app-user", "password": "correct-horse", "role": "user",
+	}, adminToken)
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var user models.User
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &user))
+	require.Equal(t, models.RoleUser, user.Role)
+}
