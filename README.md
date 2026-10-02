@@ -6,7 +6,7 @@ empresa parceira), coleta de produtos via IA a partir do link de um
 mercado, e listagem/busca de mercados e produtos cadastrados.
 
 Não existe autocadastro aqui: contas só são criadas por um admin já
-logado, através da seção "Novo usuário".
+logado, na página **Usuários**.
 
 Ao cadastrar uma **empresa parceira**, o formulário pede também o mercado
 dela e o endereço (o CEP preenche logradouro, bairro, cidade e UF via
@@ -17,7 +17,7 @@ endereço", "Abrir no mapa") e a distância até o mercado, e a Página da
 Empresa já usa esse mercado. Se já existir um mercado com o mesmo nome,
 a conta é ligada a ele e o endereço é atualizado. Quando o endereço não
 é localizado no mapa, o painel avisa: o app mostra o endereço sem a
-distância, e dá para corrigir em "Mercados cadastrados" → Editar.
+distância, e dá para corrigir em Mercados → Editar.
 
 ## Depende de
 
@@ -45,6 +45,34 @@ Usuário: `admin` — senha: `TrocarSenha123!` (conta seedada pela migration
 `0003_seed_admin.sql` do `price-auth`). Troque essa senha ou crie outro
 admin antes de qualquer uso além de desenvolvimento local.
 
+## Visual e navegação
+
+Depois do login, cada funcionalidade é uma página, escolhida no menu do
+cabeçalho (o endereço muda para `#mercados`, `#produtos`, `#catalogo`,
+`#coleta` ou `#usuarios`, então dá para favoritar ou recarregar):
+
+| Página | O que tem |
+|---|---|
+| **Mercados** | tabela com busca, cor, links, origem e as ações Recarregar, Editar e Excluir |
+| **Produtos** | tabela com busca e filtros por mercado, categoria e origem; Editar e Excluir |
+| **Catálogo** | fila de "produtos possivelmente iguais" e o botão Reprocessar catálogo; o menu mostra quantos estão pendentes |
+| **Coleta com IA** | coleta sob demanda a partir do link do site, com endereço opcional |
+| **Usuários** | cadastro de empresa parceira (com mercado e endereço) ou administrador |
+
+Mesma linguagem visual da Página da Empresa, na identidade azul do Price:
+banner no topo de cada página (com números como "4 mercados · 4 no mapa"),
+botões em pílula, painéis arredondados, categorias e origens em etiquetas
+coloridas e ações com ícones. No celular as linhas das tabelas viram
+cartões e o menu rola para o lado.
+
+**Modo escuro**: switch no cabeçalho, só nas páginas de dentro — a tela de
+login é sempre clara. Sem escolha salva, segue o tema do sistema; a escolha
+fica no `localStorage` (`price_admin_theme`).
+
+A tela de login tem o formulário num cartão branco e, à direita, um painel
+azul com o logo (some em telas estreitas). Usuário ou senha errados mostram
+"Usuário ou senha incorretos.".
+
 ## Telas
 
 ### Editar mercado (endereço)
@@ -66,11 +94,11 @@ sem localização aparecem na tabela com a marca "sem localização" e não most
 distância no app.
 
 O modal é responsivo: em telas estreitas os campos empilham e o conteúdo rola
-por dentro, e as tabelas rolam na horizontal em vez de alargar a página.
+por dentro.
 
 ### Produtos possivelmente iguais
 
-Seção no fim da página, alimentada pela fila de revisão do catálogo canônico
+Página **Catálogo**, alimentada pela fila de revisão do catálogo canônico
 (`GET /api/catalog/suggestions` do `price-back`). Cada cartão mostra o cadastro
 duvidoso ao lado do item do catálogo com o qual ele pode ser o mesmo produto —
 com mercado e preço de cada lado — e o motivo da dúvida (falta a marca num dos
