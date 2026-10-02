@@ -10,182 +10,294 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<script>
+  // Apply the saved theme before the page paints, so dark mode doesn't flash
+  // light first. No saved choice means "follow the system". The login screen
+  // is always light, so without a session the theme stays light.
+  (function () {
+    let theme = "light";
+    try {
+      const key = "price_admin_session";
+      if (localStorage.getItem(key) || sessionStorage.getItem(key)) {
+        theme = localStorage.getItem("price_admin_theme");
+        if (theme !== "light" && theme !== "dark") {
+          theme = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+      }
+    } catch (e) {}
+    document.documentElement.dataset.theme = theme;
+  })();
+</script>
 <style>
+  /* Admin identity: Price blue, with the same visual language as the partner
+     page (pill buttons, hero banners, rounded panels, loose shapes). --brand
+     is the filled-button color (white text on top); --accent is the blue for
+     text, icons and links, brighter in dark mode so it stays readable. */
   :root {
-    --primary: #2A5CB9;
-    --primary-dark: #1B3E82;
-    --primary-bg: #E3ECFA;
+    color-scheme: light;
+    --brand: #2A5CB9;
+    --brand-hover: #1F4BA0;
+    --on-brand: #FFFFFF;
+    --accent: #2A5CB9;
+    --accent-bg: #E3ECFA;
+    --hero-bg: #EEF3FC;
+    --hero-ring: #C9D8F5;
     --ink: #1C1C1E;
-    --gray: #636366;
-    --gray-light: #8E8E93;
-    --border: #E5E5EA;
-    --bg: #FAFAFA;
+    --gray: #5F6470;
+    --gray-light: #8E93A0;
+    --border: #E3E7EF;
+    --page: #F5F7FB;
+    --surface: #FFFFFF;
+    --field: #FAFBFD;
+    --readonly: #EFF2F7;
+    --row-hover: #F3F7FE;
     --red: #DC2626;
+    --red-bg: #FDECEC;
+    --ok: #15803D;
+    --ok-bg: #DCFCE7;
+    --warn: #B45309;
+    --warn-bg: #FEF3C7;
+    --shadow: 0 10px 30px rgba(30, 60, 120, 0.08);
+    --shadow-lg: 0 20px 50px rgba(15, 30, 70, 0.22);
+    --switch-track: #E3E7EF;
+    --chip-green: #15803D;  --chip-green-bg: #DCFCE7;
+    --chip-amber: #A16207;  --chip-amber-bg: #FEF3C7;
+    --chip-blue: #1D4ED8;   --chip-blue-bg: #DBEAFE;
+    --chip-red: #B91C1C;    --chip-red-bg: #FEE2E2;
+    --chip-gray: #52525B;   --chip-gray-bg: #EEF0F4;
+    --chip-violet: #6D28D9; --chip-violet-bg: #EDE9FE;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --brand: #3A6FD4;
+    --brand-hover: #4A7EE0;
+    --on-brand: #FFFFFF;
+    --accent: #8FB2F5;
+    --accent-bg: #1B2843;
+    --hero-bg: #131B2C;
+    --hero-ring: #24365C;
+    --ink: #F2F4F8;
+    --gray: #AEB4C0;
+    --gray-light: #878D9A;
+    --border: #262C38;
+    --page: #0E1116;
+    --surface: #161A22;
+    --field: #1C212B;
+    --readonly: #222835;
+    --row-hover: #1B2130;
+    --red: #F87171;
+    --red-bg: #3A1D1F;
+    --ok: #4ADE80;
+    --ok-bg: #14301F;
+    --warn: #FBBF24;
+    --warn-bg: #3A2E0B;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.6);
+    --switch-track: #262C38;
+    --chip-green: #4ADE80;  --chip-green-bg: #14301F;
+    --chip-amber: #FACC15;  --chip-amber-bg: #3A2E0B;
+    --chip-blue: #93C5FD;   --chip-blue-bg: #172554;
+    --chip-red: #FCA5A5;    --chip-red-bg: #3A1D1F;
+    --chip-gray: #D4D4D8;   --chip-gray-bg: #262C38;
+    --chip-violet: #C4B5FD; --chip-violet-bg: #2E1F55;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: "Alexandria", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: #fff;
+    background: var(--page);
     color: var(--ink);
+    transition: background-color .2s ease, color .2s ease;
   }
-  header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--border);
+  button { font-family: inherit; cursor: pointer; border: none; }
+  button:disabled { opacity: .5; cursor: default; }
+  svg { flex: 0 0 auto; }
+
+  /* --- Buttons --------------------------------------------------------------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 22px; border-radius: 999px; font-size: 14px; font-weight: 700;
+    text-decoration: none; white-space: nowrap; line-height: 1.1;
+    transition: background-color .15s ease, color .15s ease, border-color .15s ease, transform .15s ease;
   }
-  header[hidden] { display: none; }
-  header .badge {
-    width: 28px; height: 28px;
+  .btn svg { width: 16px; height: 16px; }
+  .btn-primary { background: var(--brand); color: var(--on-brand); box-shadow: 0 8px 18px rgba(42, 92, 185, .25); }
+  .btn-primary:hover:not(:disabled) { background: var(--brand-hover); transform: translateY(-1px); }
+  .btn-outline { background: transparent; color: var(--accent); border: 2px solid var(--accent); padding: 10px 20px; }
+  .btn-outline:hover { background: var(--accent-bg); }
+  .btn-ghost { background: transparent; color: var(--gray); border: 1.5px solid var(--border); padding: 10px 18px; }
+  .btn-ghost:hover { color: var(--ink); border-color: var(--gray-light); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn-sm { padding: 8px 16px; font-size: 13px; }
+  .btn-outline.btn-sm { padding: 6px 14px; }
+  .btn-ghost.btn-sm { padding: 7px 14px; }
+  .btn:focus-visible, .icon-btn:focus-visible, .seg input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* --- Header ----------------------------------------------------------------- */
+  .topbar { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .topbar[hidden] { display: none; }
+  .topbar-inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; height: 68px; display: flex; align-items: center; gap: 20px; }
+  .brand-link { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); flex: 0 0 auto; }
+  .brand-logo { width: 38px; height: 38px; border-radius: 12px; background: var(--accent-bg); display: flex; align-items: center; justify-content: center; }
+  .brand-logo img { width: 24px; height: 24px; }
+  .brand-text { display: flex; flex-direction: column; font-size: 18px; font-weight: 900; color: var(--accent); line-height: 1; }
+  .brand-text small { font-size: 10px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--gray-light); margin-top: 4px; }
+
+  nav.menu { display: flex; gap: 2px; align-self: stretch; overflow-x: auto; scrollbar-width: none; }
+  nav.menu::-webkit-scrollbar { display: none; }
+  nav.menu a {
+    position: relative; display: flex; align-items: center; gap: 7px; padding: 0 12px; flex: 0 0 auto;
+    font-size: 14px; font-weight: 600; color: var(--gray); text-decoration: none; white-space: nowrap;
+  }
+  nav.menu a svg { width: 18px; height: 18px; }
+  nav.menu a:hover { color: var(--ink); }
+  nav.menu a.active { color: var(--ink); font-weight: 800; }
+  nav.menu a.active svg { color: var(--accent); }
+  nav.menu a.active::after {
+    content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 4px;
+    border-radius: 4px 4px 0 0; background: var(--brand);
+  }
+  .nav-badge { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; text-align: center; }
+  .nav-badge:empty { display: none; }
+
+  .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+  .user-chip { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: var(--page); border: 1px solid var(--border); }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%; background: var(--brand); color: var(--on-brand);
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;
+  }
+  .user-chip .who { font-size: 13px; font-weight: 600; color: var(--ink); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  @media (max-width: 1080px) { .brand-text small, .user-chip .who { display: none; } .user-chip { padding: 2px; } }
+  @media (max-width: 900px) {
+    .topbar-inner { height: auto; flex-wrap: wrap; padding: 10px 16px 0; gap: 8px 12px; }
+    nav.menu { order: 10; width: 100%; height: 46px; margin: 0 -4px; }
+  }
+
+  /* --- Theme switch ----------------------------------------------------------- */
+  .theme-switch {
+    position: relative; width: 52px; height: 28px; flex: 0 0 auto;
+    border-radius: 999px; border: 1px solid var(--border); background: var(--switch-track);
+    padding: 0; margin: 0; transition: background-color .2s ease, border-color .2s ease;
+  }
+  .theme-switch .thumb {
+    position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; color: #F59E0B; box-shadow: 0 1px 3px rgba(0,0,0,.25);
     display: flex; align-items: center; justify-content: center;
+    transition: transform .25s cubic-bezier(.4, 0, .2, 1), background-color .2s ease, color .2s ease;
   }
-  header .badge img { width: 100%; height: 100%; }
-  header h1 { font-size: 18px; margin: 0; font-weight: 800; color: var(--primary); }
-  header span.subtitle { color: var(--gray-light); font-size: 13px; margin-left: 4px; }
-  header .spacer { flex: 1; }
-  header .who { font-size: 13px; color: var(--gray); margin-right: 12px; }
+  .theme-switch .thumb svg { width: 14px; height: 14px; }
+  .theme-switch .icon-moon { display: none; }
+  .theme-switch[aria-checked="true"] { background: var(--brand); border-color: var(--brand); }
+  .theme-switch[aria-checked="true"] .thumb { transform: translateX(24px); background: #0E1116; color: #CFE0FF; }
+  .theme-switch[aria-checked="true"] .icon-sun { display: none; }
+  .theme-switch[aria-checked="true"] .icon-moon { display: block; }
+  .theme-switch:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
-  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  /* --- Layout + decorative shapes -------------------------------------------- */
+  main { position: relative; max-width: 1200px; margin: 0 auto; padding: 28px 24px 56px; }
+  main[hidden], .page[hidden] { display: none; }
+  @media (max-width: 520px) { main { padding: 18px 16px 40px; } }
+  .bg-shapes { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+  .bg-shapes span { position: absolute; border-radius: 50%; background: var(--brand); opacity: .07; }
+  .bg-shapes .s1 { width: 260px; height: 260px; right: -130px; top: 200px; }
+  .bg-shapes .s2 { width: 200px; height: 200px; left: -110px; bottom: -40px; }
+  .bg-shapes .s3 { width: 90px; height: 90px; left: 40%; bottom: -50px; opacity: .05; }
 
-  section { margin-bottom: 32px; }
-  section h2 {
-    font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;
-    color: var(--gray-light); font-weight: 700; margin: 0 0 12px;
+  /* --- Hero --------------------------------------------------------------------- */
+  .hero-card {
+    position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 24px; align-items: center; padding: 32px 40px; margin-bottom: 26px;
+    border-radius: 28px; background: var(--hero-bg); border: 1px solid var(--border);
+  }
+  .eyebrow-pill {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px;
+    background: var(--surface); color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+    box-shadow: var(--shadow);
+  }
+  .eyebrow-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--brand); }
+  .hero-title { font-size: clamp(28px, 4vw, 42px); font-weight: 900; line-height: 1.06; margin: 16px 0 10px; letter-spacing: -.5px; overflow-wrap: anywhere; }
+  .hero-title em { font-style: normal; color: var(--accent); }
+  .hero-sub { color: var(--gray); font-size: 14px; line-height: 1.55; margin: 0; max-width: 560px; }
+  .hero-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .hero-stats:empty { display: none; }
+  .stat-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--border); font-size: 12px; font-weight: 600; color: var(--gray);
+  }
+  .stat-chip strong { color: var(--ink); font-weight: 800; }
+  .stat-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .stat-chip.ok .dot { background: var(--ok); }
+  .stat-chip.warn .dot { background: var(--warn); }
+  .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
+
+  .hero-art { position: relative; height: 210px; }
+  .art-blob { position: absolute; width: 190px; height: 190px; border-radius: 50%; background: var(--brand); right: 40px; top: 50%; transform: translateY(-50%); }
+  .art-ring { position: absolute; width: 256px; height: 256px; border-radius: 50%; border: 2px solid var(--hero-ring); right: 7px; top: 50%; transform: translateY(-50%); }
+  .art-logo {
+    position: absolute; width: 100px; height: 100px; padding: 16px; border-radius: 26px; background: #fff;
+    right: 85px; top: 50%; transform: translateY(-50%) rotate(-6deg); box-shadow: var(--shadow-lg);
+  }
+  .art-chip {
+    position: absolute; width: 46px; height: 46px; border-radius: 50%; background: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 8px 18px rgba(0,0,0,.16);
+  }
+  .art-chip.k1 { right: 52px; top: 14px; }
+  .art-chip.k2 { right: 214px; top: 82px; }
+  .art-chip.k3 { right: 64px; bottom: 10px; }
+  .art-cross, .art-dots, .art-zigzag { position: absolute; color: var(--accent); }
+  .art-cross { width: 18px; height: 18px; }
+  .art-cross.x1 { right: 280px; top: 18px; }
+  .art-cross.x2 { right: 8px; bottom: 30px; color: var(--ink); opacity: .6; }
+  .art-dots { right: 258px; bottom: 14px; width: 44px; height: 30px; opacity: .5; }
+  .art-zigzag { right: 150px; top: 4px; width: 56px; height: 14px; opacity: .45; color: var(--gray); }
+  @media (max-width: 900px) {
+    .hero-card { grid-template-columns: 1fr; padding: 26px 22px; }
+    .hero-art { display: none; }
+    .hero-card::after {
+      content: ""; position: absolute; width: 150px; height: 150px; border-radius: 50%;
+      background: var(--brand); opacity: .14; right: -60px; top: -60px;
+    }
   }
 
-  .card {
-    border: 1px solid var(--border); border-radius: 12px; padding: 20px; background: var(--bg);
+  /* --- Panels ---------------------------------------------------------------- */
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: 24px; box-shadow: var(--shadow); }
+  .panel + .panel { margin-top: 22px; }
+  @media (max-width: 520px) { .panel { padding: 18px; border-radius: 18px; } }
+  .panel-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+  .panel-head.between { justify-content: space-between; flex-wrap: wrap; }
+  .panel-head .title-row { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .panel-icon {
+    width: 44px; height: 44px; border-radius: 14px; background: var(--accent-bg); color: var(--accent);
+    display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
   }
+  .panel-icon svg { width: 22px; height: 22px; }
+  .panel-head h3 { margin: 0; font-size: 17px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .panel-head p { margin: 3px 0 0; font-size: 13px; color: var(--gray); }
+  .count-pill { font-size: 12px; font-weight: 800; padding: 2px 10px; border-radius: 999px; background: var(--brand); color: var(--on-brand); }
+  .count-pill:empty { display: none; }
+  .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--gray-light); font-weight: 800; margin: 8px 0 12px; }
+  .two-col { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+  .two-col .panel + .panel { margin-top: 0; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
 
-  .collect-form, .user-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-  .collect-form { margin-bottom: 12px; }
-  .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 220px; }
-  .field.small { flex: 0 0 120px; min-width: 100px; }
-  .field.medium { flex: 1 1 160px; min-width: 140px; }
-  #cepStatus, #companyCepStatus { font-size: 12px; margin-top: 2px; }
-  #cepStatus.error, #companyCepStatus.error { color: var(--red); }
-  #cepStatus.ok, #companyCepStatus.ok { color: var(--primary); }
-  #companyFields { margin-top: 16px; }
-  #companyFields[hidden] { display: none; }
-  #companyFields .collect-form { margin-bottom: 10px; }
-  .company-label { font-size: 12px; color: var(--gray); font-weight: 600; margin-bottom: 8px; }
-  .user-actions { margin-top: 12px; justify-content: flex-end; }
-  #userStatus.warn { color: #B45309; }
-
-  #reloadStatus { margin: -4px 0 12px; font-size: 13px; }
-  #reloadStatus.error { color: var(--red); }
-  #reloadStatus.ok { color: var(--primary); }
-
-  .links-cell { white-space: nowrap; }
-  .muted-note { color: var(--gray-light); font-style: italic; font-size: 12px; }
-  .row-actions button.reload { background: var(--primary-bg); color: var(--primary); }
-
-  .edit-links-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-  .edit-links-row span { flex: 1; font-size: 12px; color: var(--gray); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* Only the link list scrolls (the rest of the modal stays put), so a market with dozens of links stays usable. */
-  #editLinksList { max-height: 220px; overflow-y: auto; padding-right: 4px; }
-  .edit-links-search { width: 100%; margin-bottom: 6px; }
-  #editLinksCount { font-size: 12px; color: var(--gray-light); margin: 0 0 6px; }
-  .edit-links-add { display: flex; gap: 6px; margin-top: 6px; }
-  .edit-links-add input { flex: 1; }
-
-  .icon-btn {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 26px; height: 26px; padding: 0; flex: 0 0 auto;
-    border-radius: 6px; background: #fff; border: 1px solid var(--border);
-    color: var(--gray); cursor: pointer;
-  }
-  .icon-btn:hover { background: var(--bg); }
-  /* Must out-rank the generic `button.danger` (solid red) rule below. */
-  .icon-btn.danger { background: #fff; color: var(--red); }
-  .icon-btn.danger:hover { background: #FDE8E8; border-color: #F5B5B5; }
-  .icon-btn.confirm { color: #fff; background: var(--red); border-color: var(--red); }
-  .icon-btn.cancel { color: var(--gray); }
-  #editLinksStatus { font-size: 12px; margin-top: 4px; }
-  #editLinksStatus.error { color: var(--red); }
-  .field label { font-size: 12px; color: var(--gray); font-weight: 600; }
+  /* --- Form fields ------------------------------------------------------------ */
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; min-width: 0; }
+  .field label, .field .label { font-size: 12px; color: var(--gray); font-weight: 700; }
   input, select {
-    padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
-    font-size: 14px; background: #fff; color: var(--ink);
+    padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--border);
+    font-size: 14px; font-family: inherit; background: var(--field); color: var(--ink); width: 100%; min-width: 0;
+    transition: border-color .15s ease, box-shadow .15s ease;
   }
-  button {
-    padding: 10px 18px; border-radius: 8px; border: none; background: var(--ink);
-    color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
-  }
-  button.primary { background: var(--primary); }
-  button.ghost { background: transparent; color: var(--gray); border: 1px solid var(--border); }
-  button.danger { background: var(--red); }
-  button:disabled { opacity: 0.5; cursor: default; }
+  input::placeholder { color: var(--gray-light); }
+  input:focus, select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px var(--accent-bg); }
+  input[type="color"] { padding: 4px; height: 46px; cursor: pointer; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  @media (max-width: 620px) { .grid-2 { grid-template-columns: 1fr; } }
 
-  .toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-  .toolbar input, .toolbar select { min-width: 160px; }
-
-  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; }
-  thead th {
-    text-align: left; font-size: 11px; text-transform: uppercase; color: var(--gray-light);
-    padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--bg);
-  }
-  tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
-  tbody tr:last-child td { border-bottom: none; }
-  /* On phones the wide tables scroll sideways inside themselves instead of
-     stretching the whole page (which also pushed the edit modal off-screen). */
-  @media (max-width: 720px) {
-    table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    main { padding: 16px; }
-  }
-
-  .pill {
-    display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;
-  }
-  .pill.seed { background: #EFEFF4; color: var(--gray); }
-  .pill.company { background: #E5F1FC; color: #0C63E4; }
-  .pill.bot { background: var(--primary-bg); color: var(--primary); }
-
-  .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 6px; vertical-align: -2px; }
-
-  #collectStatus, #userStatus { margin-top: 12px; font-size: 13px; }
-  #collectStatus.error, #userStatus.error { color: var(--red); }
-  #collectStatus.ok, #userStatus.ok { color: var(--primary); }
-
-  .empty { color: var(--gray-light); font-size: 13px; padding: 16px; text-align: center; }
-
-  /* Catalog review queue: "are these two listings the same product?" */
-  .sugg { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 14px; margin-bottom: 10px; }
-  .sugg-reason { font-size: 12px; color: #B45309; margin-bottom: 10px; }
-  .sugg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .sugg-col h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--gray-light); }
-  .sugg-col .name { font-weight: 700; font-size: 13px; overflow-wrap: anywhere; }
-  .sugg-col .meta { font-size: 12px; color: var(--gray); margin-top: 3px; }
-  .sugg-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
-  #catalogStatus { font-size: 13px; align-self: center; }
-  #catalogStatus.error { color: var(--red); }
-  #catalogStatus.ok { color: var(--primary); }
-  @media (max-width: 720px) { .sugg-grid { grid-template-columns: 1fr; gap: 10px; } }
-
-  .row-actions { display: flex; gap: 6px; white-space: nowrap; }
-  .row-actions button {
-    padding: 5px 10px; font-size: 12px; font-weight: 600; border-radius: 6px;
-  }
-  .row-actions button.edit { background: var(--primary-bg); color: var(--primary); }
-  .row-actions button.delete { background: #FDE8E8; color: var(--red); }
-
-  .modal-overlay {
-    position: fixed; inset: 0; background: rgba(28,28,30,0.45);
-    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 100;
-  }
-  .modal-overlay[hidden] { display: none; }
-  .modal { width: 100%; max-width: 380px; background: #fff; max-height: calc(100vh - 40px); overflow-y: auto; }
-  .modal.wide { max-width: 600px; }
-  .modal h3 { margin: 0 0 16px; font-size: 16px; }
-  .modal .field { margin-bottom: 12px; }
-  .modal .section-label { font-size: 12px; color: var(--gray); font-weight: 600; margin: 4px 0 8px; }
-
-  /* Address block of the market modal: 6-column grid on desktop, stacked on phones. */
-  .addr-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
-  .addr-grid .field { min-width: 0; margin-bottom: 0; }
-  .addr-grid input { width: 100%; min-width: 0; }
+  /* Address block: 6-column grid on desktop, 2 columns on phones. */
+  .addr-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0 14px; }
   .addr-grid .f-cep, .addr-grid .f-number, .addr-grid .f-uf { grid-column: span 2; }
   .addr-grid .f-street, .addr-grid .f-neigh, .addr-grid .f-city { grid-column: span 4; }
   .addr-grid .f-comp { grid-column: span 6; }
@@ -193,135 +305,336 @@
     .addr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .addr-grid .field { grid-column: span 2; }
     .addr-grid .f-cep, .addr-grid .f-number, .addr-grid .f-uf { grid-column: span 1; }
-    .modal-overlay { padding: 12px; }
   }
-  #editCepStatus { font-size: 12px; margin: -6px 0 10px; }
-  #editCepStatus.error { color: var(--red); }
-  #editCepStatus.ok { color: var(--primary); }
-  .loc-status { font-size: 12px; margin: 0 0 12px; }
-  .loc-status.ok { color: var(--primary); }
-  .loc-status.warn { color: #B45309; }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
-  #editStatus, #confirmStatus { margin-top: 10px; font-size: 13px; }
-  #editStatus.error, #confirmStatus.error { color: var(--red); }
-  #editStatus.warn { color: #B45309; }
-  #confirmMessage { font-size: 14px; color: var(--gray); margin: 0; }
-
-  /* Login screen — split layout: illustration left, form right */
-  #loginScreen { display: flex; min-height: 100vh; }
-  #loginScreen[hidden] { display: none; }
-
-  .illustration-panel {
-    flex: 1 1 45%; min-width: 320px; position: relative; overflow: hidden;
-    background: linear-gradient(160deg, var(--primary) 0%, var(--primary-dark) 100%);
-    display: flex; align-items: center; justify-content: center;
-  }
-  .deco-circle { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.08); }
-  .deco-1 { width: 320px; height: 320px; top: -80px; left: -80px; }
-  .deco-2 { width: 200px; height: 200px; bottom: -60px; right: -30px; }
-  .hero { position: relative; width: 220px; height: 220px; display: flex; align-items: center; justify-content: center; }
-  .hero-logo { width: 130px; height: 130px; background: #fff; border-radius: 32px; padding: 20px; box-shadow: 0 12px 28px rgba(0,0,0,0.22); }
-  .floating-chip {
-    position: absolute; width: 44px; height: 44px; border-radius: 50%; background: #fff;
-    display: flex; align-items: center; justify-content: center; font-size: 20px;
-    box-shadow: 0 8px 18px rgba(0,0,0,0.2);
-  }
-  .chip-1 { top: -14px; right: -14px; }
-  .chip-2 { bottom: 6px; left: -34px; }
-  .chip-3 { top: 46%; left: -54px; }
-  .chip-4 { bottom: -18px; right: 30px; }
-  .hero-tagline {
-    position: absolute; bottom: 48px; left: 0; right: 0; text-align: center; padding: 0 40px;
-    color: #fff; font-size: 15px; font-weight: 700;
-  }
-  .hero-tagline span { display: block; font-size: 12px; font-weight: 500; opacity: 0.8; margin-top: 4px; }
-  @media (max-width: 760px) { .illustration-panel { display: none; } }
-
-  .form-panel { flex: 1 1 55%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
-  .login-card { width: 100%; max-width: 360px; }
-  .login-card .brand { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px; }
-  .login-card .brand img { width: 26px; height: 26px; }
-  .login-card .brand span { font-size: 17px; font-weight: 800; color: var(--primary); }
-  .login-card h2 {
-    font-size: 22px; font-weight: 900; color: var(--ink); margin: 0 0 4px; text-align: center;
-  }
-  .login-card p.lead { color: var(--gray); font-size: 13px; margin: 0 0 22px; text-align: center; }
-  .login-card .field { min-width: 0; margin-bottom: 14px; }
-  .login-card button { width: 100%; }
-  .login-options {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 18px; font-size: 13px;
-  }
-  .login-options label { display: flex; align-items: center; gap: 6px; color: var(--gray); cursor: pointer; }
-  .login-options input[type="checkbox"] { width: 14px; height: 14px; margin: 0; }
-  .login-options a { color: var(--primary); text-decoration: none; cursor: pointer; }
-  .login-options a:hover { text-decoration: underline; }
-  #forgotNote {
-    font-size: 12px; color: var(--gray); background: var(--primary-bg); border-radius: 8px;
-    padding: 10px 12px; margin: -6px 0 14px;
-  }
-  #forgotNote[hidden] { display: none; }
 
   .password-wrap { position: relative; }
-  .password-wrap input { width: 100%; padding-right: 40px; }
+  .password-wrap input { padding-right: 46px; }
   .password-wrap .toggle-password {
-    position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
-    width: auto; height: auto; margin: 0; padding: 6px;
+    position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+    width: 34px; height: 34px; padding: 0; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    background: none; border: none; color: var(--gray-light); cursor: pointer;
+    background: transparent; color: var(--gray-light); transition: color .15s ease;
   }
-  .password-wrap .toggle-password:hover { color: var(--ink); }
+  .password-wrap .toggle-password:hover, .password-wrap .toggle-password:focus-visible { color: var(--accent); outline: none; }
   .password-wrap .toggle-password svg { display: block; }
 
+  /* Segmented choice (account type). */
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+  .seg label { position: relative; cursor: pointer; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg span {
+    display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 16px;
+    border: 2px solid var(--border); background: var(--field); transition: border-color .15s ease, background-color .15s ease;
+  }
+  .seg span i { font-style: normal; font-size: 22px; width: 42px; height: 42px; border-radius: 12px; background: var(--surface); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .seg strong { display: block; font-size: 14px; }
+  .seg small { display: block; font-size: 12px; color: var(--gray); margin-top: 2px; }
+  .seg input:checked + span { border-color: var(--brand); background: var(--accent-bg); }
+  @media (max-width: 520px) { .seg { grid-template-columns: 1fr; } }
+
+  /* Status messages: the JS sets className to "", "ok", "error" or "warn". */
+  #collectStatus, #cepStatus, #userStatus, #companyCepStatus, #reloadStatus, #catalogStatus,
+  #editStatus, #confirmStatus, #editCepStatus, #editLinksStatus {
+    font-size: 13px; color: var(--gray); line-height: 1.5;
+  }
+  #collectStatus:not(:empty), #userStatus:not(:empty), #reloadStatus:not(:empty), #editStatus:not(:empty), #confirmStatus:not(:empty) { margin-top: 12px; }
+  #cepStatus:not(:empty), #companyCepStatus:not(:empty), #editCepStatus:not(:empty) { margin: -4px 0 12px; font-size: 12px; }
+  #editLinksStatus:not(:empty) { margin-top: 6px; font-size: 12px; }
+  [id$="Status"].error { color: var(--red); }
+  [id$="Status"].ok { color: var(--ok); }
+  [id$="Status"].warn { color: var(--warn); }
+  #reloadStatus:not(:empty) { padding: 10px 14px; border-radius: 12px; background: var(--field); border: 1px solid var(--border); margin: 0 0 14px; }
+
+  .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+
+  /* --- Toolbar + search ------------------------------------------------------ */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .toolbar select { width: auto; min-width: 170px; border-radius: 999px; padding: 10px 14px; }
+  .search-pill {
+    display: flex; align-items: center; gap: 8px; padding: 0 6px 0 16px; border-radius: 999px;
+    background: var(--field); border: 1.5px solid var(--border); width: 300px; max-width: 100%;
+  }
+  .search-pill:focus-within { border-color: var(--brand); box-shadow: 0 0 0 4px var(--accent-bg); }
+  .search-pill svg { width: 18px; height: 18px; color: var(--gray-light); }
+  .search-pill input { border: none; background: transparent; padding: 10px 6px; box-shadow: none !important; }
+  .filters { margin-bottom: 16px; }
+  @media (max-width: 620px) {
+    .search-pill, .toolbar select { width: 100%; }
+  }
+
+  /* --- Tables ---------------------------------------------------------------- */
+  .table-wrap { border: 1px solid var(--border); border-radius: 16px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 13px 16px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--gray-light); font-weight: 800; background: var(--field); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background-color .12s ease; }
+  tbody tr:hover td { background: var(--row-hover); }
+  td.name { white-space: normal; min-width: 220px; }
+  td.muted { color: var(--gray); font-size: 13px; }
+  td.price { font-weight: 900; font-size: 15px; }
+  .ent { display: flex; align-items: center; gap: 12px; }
+  .ent-avatar {
+    width: 40px; height: 40px; border-radius: 12px; background: var(--accent-bg); color: var(--accent);
+    display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; flex: 0 0 auto;
+  }
+  .ent-name { font-weight: 700; overflow-wrap: anywhere; }
+  .ent-sub { font-size: 12px; color: var(--gray-light); margin-top: 2px; white-space: normal; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .chip.green { color: var(--chip-green); background: var(--chip-green-bg); }
+  .chip.amber { color: var(--chip-amber); background: var(--chip-amber-bg); }
+  .chip.blue { color: var(--chip-blue); background: var(--chip-blue-bg); }
+  .chip.red { color: var(--chip-red); background: var(--chip-red-bg); }
+  .chip.gray { color: var(--chip-gray); background: var(--chip-gray-bg); }
+  .chip.violet { color: var(--chip-violet); background: var(--chip-violet-bg); }
+  .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 5px; vertical-align: -2px; margin-right: 6px; border: 1px solid rgba(0,0,0,.08); }
+  td.actions { text-align: right; }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--gray); margin-left: 2px; transition: background-color .15s ease, color .15s ease;
+  }
+  .icon-btn svg { width: 17px; height: 17px; }
+  .icon-btn:hover:not(:disabled) { background: var(--accent-bg); color: var(--accent); }
+  .icon-btn.remove:hover:not(:disabled) { background: var(--red-bg); color: var(--red); }
+  .empty-state { text-align: center; padding: 36px 16px; color: var(--gray); white-space: normal; }
+  .empty-state .empty-icon {
+    width: 60px; height: 60px; border-radius: 50%; background: var(--accent-bg); color: var(--accent);
+    display: inline-flex; align-items: center; justify-content: center; margin-bottom: 10px;
+  }
+  .empty-state .empty-icon svg { width: 28px; height: 28px; }
+  .empty-state strong { display: block; color: var(--ink); font-size: 15px; margin-bottom: 4px; }
+  .empty-state span { font-size: 13px; }
+
+  /* Phones: each row becomes a card. */
+  @media (max-width: 680px) {
+    .table-wrap { border: none; border-radius: 0; overflow: visible; }
+    table, tbody { display: block; }
+    thead { display: none; }
+    tbody tr {
+      display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center;
+      padding: 14px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: 16px; background: var(--field);
+    }
+    tbody tr:last-child { margin-bottom: 0; }
+    tbody td { border: none !important; padding: 0; white-space: normal; background: none !important; }
+    td.name, td[colspan] { flex: 1 1 100%; min-width: 0; }
+    td.price { margin-left: auto; }
+    td.actions { flex: 1 1 100%; text-align: right; border-top: 1px dashed var(--border) !important; padding-top: 6px; }
+    td.hide-sm { display: none; }
+  }
+
+  /* --- Catalog review ------------------------------------------------------- */
+  .sugg { border: 1px solid var(--border); border-radius: 18px; background: var(--field); padding: 18px; }
+  .sugg + .sugg { margin-top: 12px; }
+  .sugg-reason { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .sugg-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; }
+  .sugg-col { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; min-width: 0; }
+  .sugg-col h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--gray-light); }
+  .sugg-col .name { font-weight: 800; font-size: 14px; overflow-wrap: anywhere; }
+  .sugg-col .meta { font-size: 12px; color: var(--gray); margin-top: 4px; line-height: 1.6; }
+  .sugg-vs { align-self: center; width: 38px; height: 38px; border-radius: 50%; background: var(--accent-bg); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; }
+  .sugg-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
+  @media (max-width: 720px) { .sugg-grid { grid-template-columns: 1fr; } .sugg-vs { justify-self: center; } }
+
+  /* --- Steps (Coleta) -------------------------------------------------------- */
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .steps li { display: flex; gap: 12px; align-items: flex-start; font-size: 13px; color: var(--gray); line-height: 1.5; }
+  .steps li b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 2px; }
+  .step-n { width: 32px; height: 32px; border-radius: 50%; background: var(--brand); color: var(--on-brand); display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; flex: 0 0 auto; }
+  .tip { margin-top: 16px; padding: 12px 14px; border-radius: 14px; background: var(--accent-bg); color: var(--ink); font-size: 12px; line-height: 1.5; }
+
+  /* --- Modals ---------------------------------------------------------------- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(10, 16, 30, .5); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal {
+    width: 100%; max-width: 460px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 24px; padding: 26px; box-shadow: var(--shadow-lg); max-height: calc(100vh - 32px); overflow-y: auto;
+  }
+  .modal.wide { max-width: 640px; }
+  @media (max-width: 520px) { .modal { padding: 20px; border-radius: 20px; } }
+  .modal h3 { margin: 0 0 18px; font-size: 19px; font-weight: 900; }
+  #confirmMessage { font-size: 14px; color: var(--gray); margin: 0; line-height: 1.5; }
+  .loc-status { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 10px 12px; border-radius: 12px; margin: 0 0 14px; }
+  .loc-status.ok { background: var(--ok-bg); }
+  .loc-status.warn { background: var(--warn-bg); }
+  .links-box { border: 1px solid var(--border); border-radius: 14px; padding: 10px; background: var(--field); }
+  #editLinksList { max-height: 220px; overflow-y: auto; }
+  #editLinksCount { font-size: 12px; color: var(--gray-light); margin: 2px 4px 6px; }
+  #editLinksCount:empty { display: none; }
+  .edit-links-row { display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 10px; border-radius: 10px; }
+  .edit-links-row:hover { background: var(--row-hover); }
+  .edit-links-row span { flex: 1; font-size: 12px; color: var(--gray); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .edit-links-row .icon-btn { width: 30px; height: 30px; }
+  .edit-links-row .icon-btn svg { width: 14px; height: 14px; }
+  .edit-links-row .icon-btn.confirm { background: var(--red); color: #fff; }
+  .edit-links-add { display: flex; gap: 8px; margin-top: 8px; }
+  .edit-links-add input { flex: 1; }
+  .muted-note { color: var(--gray-light); font-size: 12px; padding: 6px 4px; }
+
+  /* --- Login ------------------------------------------------------------------
+     Always light. Warm-neutral background with loose blue shapes, a white
+     rounded card with pill button; on the right, a blue panel with the Price
+     logo illustration and what the panel is for. */
+  #loginScreen {
+    position: relative; display: flex; min-height: 100vh; overflow: hidden;
+    background: var(--page); padding: 16px; gap: 16px;
+  }
+  #loginScreen[hidden] { display: none; }
+  .login-shapes { position: absolute; inset: 0; pointer-events: none; }
+  .login-shapes .blob { position: absolute; border-radius: 50%; background: var(--brand); }
+  .login-shapes .b1 { width: 220px; height: 220px; left: -110px; top: -70px; opacity: .9; }
+  .login-shapes .b2 { width: 140px; height: 140px; left: 38%; bottom: -80px; opacity: .25; }
+  .login-shapes .ring { position: absolute; width: 320px; height: 320px; border-radius: 50%; border: 2px solid var(--hero-ring); left: -150px; top: -120px; }
+  .login-shapes svg { position: absolute; color: var(--accent); }
+  .login-shapes .x1 { width: 16px; height: 16px; left: 8%; bottom: 18%; }
+  .login-shapes .x2 { width: 14px; height: 14px; left: 3%; top: 56%; color: var(--ink); opacity: .5; }
+  .login-shapes .dots { width: 44px; height: 30px; left: 6%; top: 42%; opacity: .45; }
+  .login-shapes .zz { width: 56px; height: 14px; left: 40%; bottom: 14%; color: var(--gray-light); opacity: .6; }
+
+  .form-panel {
+    position: relative; z-index: 1; flex: 1 1 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px;
+  }
+  .login-card {
+    width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 28px; padding: 36px 34px 30px; box-shadow: 0 24px 60px rgba(30, 60, 120, .12);
+  }
+  @media (max-width: 480px) { .login-card { padding: 28px 22px 24px; border-radius: 24px; } }
+  .login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+  .login-brand .brand-logo { width: 42px; height: 42px; border-radius: 13px; }
+  .login-brand .brand-logo img { width: 26px; height: 26px; }
+  .login-card .eyebrow-pill { box-shadow: none; background: var(--accent-bg); }
+  .login-card h2 { font-size: 32px; font-weight: 900; line-height: 1.08; letter-spacing: -.5px; margin: 14px 0 8px; }
+  .login-card h2 em { font-style: normal; color: var(--accent); }
+  .login-card p.lead { color: var(--gray); font-size: 14px; margin: 0 0 24px; line-height: 1.5; }
+  .input-icon { position: relative; }
+  .input-icon > svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--gray-light); pointer-events: none; transition: color .15s ease; }
+  .input-icon:focus-within > svg { color: var(--accent); }
+  #loginScreen input:not([type="checkbox"]) { height: 50px; padding-left: 44px; border-radius: 14px; }
+  .login-options { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 20px; font-size: 13px; }
+  .login-options label { display: flex; align-items: center; gap: 8px; color: var(--gray); cursor: pointer; }
+  .login-options input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--brand); }
+  .login-options a { color: var(--accent); font-weight: 700; text-decoration: none; cursor: pointer; }
+  .login-options a:hover { text-decoration: underline; }
+  #forgotNote { font-size: 13px; background: var(--accent-bg); border-radius: 14px; padding: 12px 14px; margin: -6px 0 16px; line-height: 1.5; }
+  #forgotNote[hidden] { display: none; }
+  #loginBtn { width: 100%; height: 52px; font-size: 15px; }
+  #loginBtn svg { width: 18px; height: 18px; transition: transform .15s ease; }
+  #loginBtn:hover:not(:disabled) svg { transform: translateX(3px); }
   #loginStatus { margin-top: 12px; font-size: 13px; color: var(--red); text-align: center; }
-  .copyright { margin-top: 32px; font-size: 12px; color: var(--gray-light); text-align: center; }
+  #loginStatus:empty { display: none; }
+  .restricted-note {
+    display: flex; gap: 10px; align-items: flex-start; margin-top: 22px; padding: 12px 14px; border-radius: 14px;
+    background: var(--page); font-size: 12px; color: var(--gray); line-height: 1.5;
+  }
+  .restricted-note svg { width: 18px; height: 18px; color: var(--accent); margin-top: 1px; }
+  .copyright { margin-top: 22px; font-size: 12px; color: var(--gray-light); text-align: center; }
+
+  .showcase {
+    position: relative; z-index: 1; flex: 1 1 50%; min-width: 0; overflow: hidden; border-radius: 32px;
+    background: linear-gradient(160deg, #3D72D6 0%, #2A5CB9 50%, #1B3E82 100%); color: #fff;
+    display: flex; flex-direction: column; justify-content: center; padding: 48px 52px;
+  }
+  @media (max-width: 900px) { .showcase { display: none; } }
+  .showcase .ring { position: absolute; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .22); }
+  .showcase .r1 { width: 420px; height: 420px; right: -140px; top: -150px; }
+  .showcase .r2 { width: 240px; height: 240px; left: -90px; bottom: -110px; }
+  .showcase .soft { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, .08); }
+  .showcase .s1 { width: 260px; height: 260px; right: -60px; top: -70px; }
+  .showcase .s2 { width: 120px; height: 120px; left: 46%; bottom: -60px; }
+  .showcase .deco { position: absolute; color: #fff; opacity: .55; }
+  .showcase .dx1 { width: 18px; height: 18px; left: 52px; top: 44px; }
+  .showcase .dx2 { width: 14px; height: 14px; right: 56px; bottom: 120px; }
+  .showcase .ddots { width: 44px; height: 30px; right: 60px; bottom: 54px; opacity: .35; }
+  .showcase .dzz { width: 56px; height: 14px; left: 56%; top: 54px; opacity: .4; }
+  .stage { position: relative; width: 230px; height: 200px; margin: 0 auto 36px; }
+  .stage .disc { position: absolute; inset: 10px 25px; border-radius: 50%; background: rgba(255, 255, 255, .14); }
+  .stage .logo-tile {
+    position: absolute; left: 50%; top: 50%; width: 124px; height: 124px; padding: 20px; border-radius: 32px; background: #fff;
+    transform: translate(-50%, -50%) rotate(-6deg); box-shadow: 0 22px 44px rgba(5, 15, 40, .35);
+  }
+  .stage .fchip {
+    position: absolute; width: 50px; height: 50px; border-radius: 50%; background: #fff; font-size: 22px;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 22px rgba(5, 15, 40, .25);
+  }
+  .stage .f1 { right: 8px; top: 2px; }
+  .stage .f2 { left: -2px; top: 70px; }
+  .stage .f3 { right: 18px; bottom: 0; }
+  .stage .price-tag {
+    position: absolute; left: 6px; bottom: 6px; padding: 8px 12px; border-radius: 14px; background: #fff; color: #1B3E82;
+    font-size: 12px; font-weight: 800; box-shadow: 0 10px 22px rgba(5, 15, 40, .25); transform: rotate(4deg);
+  }
+  .stage .price-tag small { display: block; font-size: 10px; font-weight: 600; color: #5F6B85; }
+  .showcase h3 { position: relative; font-size: clamp(26px, 2.6vw, 34px); font-weight: 900; line-height: 1.12; letter-spacing: -.5px; margin: 0 0 22px; max-width: 440px; }
+  .showcase h3 em { font-style: normal; background: #fff; color: #1B3E82; padding: 0 8px; border-radius: 10px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+  .perks { position: relative; list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; max-width: 440px; }
+  .perks li { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; }
+  .perks .perk-icon { width: 38px; height: 38px; border-radius: 12px; background: rgba(255, 255, 255, .16); display: flex; align-items: center; justify-content: center; }
+  .perks .perk-icon svg { width: 19px; height: 19px; }
 </style>
 </head>
 <body>
 
-<header id="appHeader" hidden>
-  <div class="badge"><img src="logo-price.svg" alt="Price" /></div>
-  <h1>Price</h1>
-  <span class="subtitle">Painel Administrativo</span>
-  <div class="spacer"></div>
-  <span class="who" id="whoAmI" hidden></span>
-  <button class="ghost" id="logoutBtn" onclick="logout()" hidden>Sair</button>
+<header id="appHeader" class="topbar" hidden>
+  <div class="topbar-inner">
+    <a class="brand-link" href="#mercados">
+      <span class="brand-logo"><img src="logo-price.svg" alt="" /></span>
+      <span class="brand-text">Price<small>Painel administrativo</small></span>
+    </a>
+    <nav class="menu" aria-label="Páginas">
+      <a href="#mercados" data-page="mercados"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9 4.5 4h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z"/><path d="M5 13v7h14v-7"/><path d="M10 20v-4h4v4"/></svg>Mercados</a>
+      <a href="#produtos" data-page="produtos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Produtos</a>
+      <a href="#catalogo" data-page="catalogo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Catálogo<span class="nav-badge" id="navSuggestions"></span></a>
+      <a href="#coleta" data-page="coleta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z"/></svg>Coleta com IA</a>
+      <a href="#usuarios" data-page="usuarios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>Usuários</a>
+    </nav>
+    <div class="topbar-actions">
+      <button type="button" class="theme-switch" role="switch" aria-label="Modo escuro" onclick="toggleTheme()">
+        <span class="thumb">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+        </span>
+      </button>
+      <div class="user-chip"><span class="avatar" id="userAvatar"></span><span class="who" id="whoAmI"></span></div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="logout()">Sair</button>
+    </div>
+  </div>
 </header>
 
 <div id="loginScreen">
-  <div class="illustration-panel">
-    <div class="deco-circle deco-1"></div>
-    <div class="deco-circle deco-2"></div>
-    <div class="hero">
-      <img src="logo-price.svg" class="hero-logo" alt="" aria-hidden="true" />
-      <div class="floating-chip chip-1">🍅</div>
-      <div class="floating-chip chip-2">🥛</div>
-      <div class="floating-chip chip-3">🥦</div>
-      <div class="floating-chip chip-4">🍞</div>
-    </div>
-    <p class="hero-tagline">
-      Compare preços entre mercados perto de você
-      <span>e economize em toda lista de compras.</span>
-    </p>
+  <div class="login-shapes" aria-hidden="true">
+    <span class="ring"></span><span class="blob b1"></span><span class="blob b2"></span>
+    <svg class="x1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg>
+    <svg class="x2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg>
+    <svg class="dots" viewBox="0 0 44 30" fill="currentColor"><circle cx="4" cy="4" r="3"/><circle cx="22" cy="4" r="3"/><circle cx="40" cy="4" r="3"/><circle cx="4" cy="26" r="3"/><circle cx="22" cy="26" r="3"/><circle cx="40" cy="26" r="3"/></svg>
+    <svg class="zz" viewBox="0 0 56 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12 9 2l7 10 7-10 7 10 7-10 7 10 7-10"/></svg>
   </div>
 
   <div class="form-panel">
     <div class="login-card">
-      <div class="brand">
-        <img src="logo-price.svg" alt="" aria-hidden="true" />
-        <span>Price</span>
+      <div class="login-brand">
+        <span class="brand-logo"><img src="logo-price.svg" alt="" /></span>
+        <span class="brand-text">Price<small>Painel administrativo</small></span>
       </div>
-      <h2>Entrar</h2>
-      <p class="lead">Acesso restrito à equipe interna do Price.</p>
+
+      <span class="eyebrow-pill">Equipe Price</span>
+      <h2>Bem-vindo <em>de volta!</em></h2>
+      <p class="lead">Entre para gerenciar mercados, produtos, coletas e acessos do Price.</p>
 
       <div class="field">
         <label for="loginUsername">Usuário</label>
-        <input id="loginUsername" type="text" placeholder="admin" autocomplete="username" />
+        <div class="input-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <input id="loginUsername" type="text" placeholder="admin" autocomplete="username" onkeydown="if (event.key === 'Enter') document.getElementById('loginPassword').focus()" />
+        </div>
       </div>
       <div class="field">
         <label for="loginPassword">Senha</label>
-        <div class="password-wrap">
-          <input id="loginPassword" type="password" placeholder="••••••••" />
+        <div class="password-wrap input-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if (event.key === 'Enter') login()" />
           <button type="button" class="toggle-password" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="Mostrar senha">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
@@ -334,63 +647,273 @@
       </div>
       <p id="forgotNote" hidden>Fale com um administrador do Price para redefinir sua senha.</p>
 
-      <button class="primary" id="loginBtn" onclick="login()">Entrar</button>
+      <button class="btn btn-primary" id="loginBtn" onclick="login()">Entrar <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
       <div id="loginStatus"></div>
+
+      <p class="restricted-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span>Acesso restrito à equipe interna do Price. Empresas parceiras usam a Página da Empresa.</span>
+      </p>
     </div>
     <p class="copyright">Price © 2026 · Todos os direitos reservados</p>
   </div>
+
+  <aside class="showcase" aria-hidden="true">
+    <span class="soft s1"></span><span class="soft s2"></span>
+    <span class="ring r1"></span><span class="ring r2"></span>
+    <svg class="deco dx1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg>
+    <svg class="deco dx2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg>
+    <svg class="deco ddots" viewBox="0 0 44 30" fill="currentColor"><circle cx="4" cy="4" r="3"/><circle cx="22" cy="4" r="3"/><circle cx="40" cy="4" r="3"/><circle cx="4" cy="26" r="3"/><circle cx="22" cy="26" r="3"/><circle cx="40" cy="26" r="3"/></svg>
+    <svg class="deco dzz" viewBox="0 0 56 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12 9 2l7 10 7-10 7 10 7-10 7 10 7-10"/></svg>
+
+    <div class="stage">
+      <span class="disc"></span>
+      <img src="logo-price.svg" class="logo-tile" alt="" />
+      <span class="fchip f1">🍅</span>
+      <span class="fchip f2">🥛</span>
+      <span class="fchip f3">🥦</span>
+      <span class="price-tag"><small>3 mercados</small>a partir de R$ 4,99</span>
+    </div>
+
+    <h3>Compare preços entre <em>mercados perto de você</em></h3>
+    <ul class="perks">
+      <li><span class="perk-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9 4.5 4h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z"/><path d="M5 13v7h14v-7"/></svg></span>Gerencie mercados, endereços e links</li>
+      <li><span class="perk-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/></svg></span>Colete produtos dos sites com IA</li>
+      <li><span class="perk-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Revise o catálogo e crie acessos</li>
+    </ul>
+  </aside>
 </div>
 
 <main id="app" hidden>
-  <section>
-    <h2>Coleta sob demanda</h2>
-    <div class="card">
-      <div class="collect-form">
-        <div class="field">
-          <label for="collectUrl">Link do site do mercado</label>
-          <input id="collectUrl" type="url" placeholder="https://www.mercado-exemplo.com.br" />
-        </div>
-        <div class="field">
-          <label for="collectMarketName">Nome do mercado</label>
-          <input id="collectMarketName" type="text" placeholder="Ex: Mercado Exemplo" />
-        </div>
-      </div>
-      <div class="collect-form">
-        <div class="field small">
-          <label for="collectCep">CEP</label>
-          <input id="collectCep" type="text" placeholder="64000-000" maxlength="9" oninput="handleCepInput(this)" />
-        </div>
-        <div class="field medium">
-          <label for="collectStreet">Logradouro</label>
-          <input id="collectStreet" type="text" placeholder="Rua / Av." />
-        </div>
-        <div class="field small">
-          <label for="collectNumber">Número</label>
-          <input id="collectNumber" type="text" placeholder="123" />
-        </div>
-        <div class="field medium">
-          <label for="collectNeighborhood">Bairro</label>
-          <input id="collectNeighborhood" type="text" placeholder="Bairro" />
-        </div>
-        <div class="field medium">
-          <label for="collectCity">Cidade</label>
-          <input id="collectCity" type="text" placeholder="Cidade" />
-        </div>
-        <div class="field small">
-          <label for="collectState">UF</label>
-          <input id="collectState" type="text" placeholder="PI" maxlength="2" style="text-transform: uppercase;" />
-        </div>
-        <button class="primary" id="collectBtn" onclick="runCollect()">Coletar com IA</button>
-      </div>
-      <div id="cepStatus"></div>
-      <div id="collectStatus"></div>
-    </div>
-  </section>
+  <div class="bg-shapes" aria-hidden="true"><span class="s1"></span><span class="s2"></span><span class="s3"></span></div>
 
-  <section>
-    <h2>Novo usuário</h2>
-    <div class="card">
-      <div class="user-form">
+  <!-- Mercados --------------------------------------------------------------- -->
+  <div class="page" id="page-mercados" hidden>
+    <section class="hero-card">
+      <div>
+        <span class="eyebrow-pill">Painel administrativo</span>
+        <h2 class="hero-title">Mercados <em>cadastrados</em></h2>
+        <p class="hero-sub">Os mercados que aparecem no app: endereço no mapa, links do site para a coleta e de onde vieram.</p>
+        <div class="hero-stats" id="marketsStats"></div>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#coleta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Coletar novo mercado</a>
+          <a class="btn btn-outline" href="#usuarios">Cadastrar empresa</a>
+        </div>
+      </div>
+      <div class="hero-art" data-art="🏪 🛒 📍"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head between">
+        <div class="title-row">
+          <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9 4.5 4h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z"/><path d="M5 13v7h14v-7"/></svg></span>
+          <div>
+            <h3>Todos os mercados <span class="count-pill" id="marketsCount"></span></h3>
+            <p>Recarregar coleta de novo os links do mercado.</p>
+          </div>
+        </div>
+        <label class="search-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="marketSearch" type="search" placeholder="Buscar mercado..." aria-label="Buscar mercado" oninput="loadMarkets()" />
+        </label>
+      </div>
+      <div id="reloadStatus"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Mercado</th><th>Cor</th><th>Links</th><th>Origem</th><th></th></tr></thead>
+          <tbody id="marketsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- Produtos --------------------------------------------------------------- -->
+  <div class="page" id="page-produtos" hidden>
+    <section class="hero-card">
+      <div>
+        <span class="eyebrow-pill">Painel administrativo</span>
+        <h2 class="hero-title">Produtos <em>no app</em></h2>
+        <p class="hero-sub">Tudo o que o app compara: cadastrado pelas empresas parceiras, coletado pelo bot ou de demonstração.</p>
+        <div class="hero-stats" id="productsStats"></div>
+      </div>
+      <div class="hero-art" data-art="🍅 🥛 🥦"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head between">
+        <div class="title-row">
+          <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+          <div>
+            <h3>Produtos cadastrados <span class="count-pill" id="productsCount"></span></h3>
+            <p>Filtre por mercado, categoria ou origem.</p>
+          </div>
+        </div>
+      </div>
+      <div class="toolbar filters">
+        <label class="search-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="productSearch" type="search" placeholder="Buscar produto..." aria-label="Buscar produto" oninput="loadProducts()" />
+        </label>
+        <select id="marketFilter" onchange="loadProducts()" aria-label="Mercado">
+          <option value="">Todos os mercados</option>
+        </select>
+        <select id="categoryFilter" onchange="loadProducts()" aria-label="Categoria">
+          <option value="">Todas as categorias</option>
+          <option value="HORTIFRUTI">Hortifruti</option>
+          <option value="GRÃOS">Grãos</option>
+          <option value="LATICÍNIOS">Laticínios</option>
+          <option value="CARNES">Carnes</option>
+          <option value="OUTROS">Outros</option>
+        </select>
+        <select id="sourceFilter" onchange="loadProducts()" aria-label="Origem">
+          <option value="">Todas as origens</option>
+          <option value="seed">Demo</option>
+          <option value="company">Empresa parceira</option>
+          <option value="bot">Bot de coleta</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Mercado</th><th>Origem</th><th></th></tr></thead>
+          <tbody id="productsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- Catálogo ---------------------------------------------------------------- -->
+  <div class="page" id="page-catalogo" hidden>
+    <section class="hero-card">
+      <div>
+        <span class="eyebrow-pill">Painel administrativo</span>
+        <h2 class="hero-title">Revisão do <em>catálogo</em></h2>
+        <p class="hero-sub">Quando o sistema não tem certeza de que dois cadastros são o mesmo produto, ele pergunta aqui. Os casos óbvios (mesma marca, mesmo tamanho) já são ligados sozinhos.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary" id="catalogMatchBtn" onclick="runCatalogMatch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Reprocessar catálogo</button>
+          <span id="catalogStatus"></span>
+        </div>
+      </div>
+      <div class="hero-art" data-art="🔍 ✅ 🏷️"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+        <div>
+          <h3>Produtos possivelmente iguais <span class="count-pill" id="suggestionsCount"></span></h3>
+          <p>Ligar os dois faz o app comparar o preço desse produto entre os mercados.</p>
+        </div>
+      </div>
+      <div id="suggestionsList"></div>
+    </section>
+  </div>
+
+  <!-- Coleta ------------------------------------------------------------------- -->
+  <div class="page" id="page-coleta" hidden>
+    <section class="hero-card">
+      <div>
+        <span class="eyebrow-pill">Painel administrativo</span>
+        <h2 class="hero-title">Coleta <em>com IA</em></h2>
+        <p class="hero-sub">Informe o site de um mercado: o bot lê a página, a IA reconhece os produtos e preços e eles entram no app.</p>
+      </div>
+      <div class="hero-art" data-art="🤖 🌐 📦"></div>
+    </section>
+
+    <div class="two-col">
+      <section class="panel">
+        <div class="panel-head">
+          <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/></svg></span>
+          <div>
+            <h3>Coleta sob demanda</h3>
+            <p>Se o mercado já existir (mesmo nome), o link é adicionado a ele.</p>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="collectUrl">Link do site do mercado</label>
+            <input id="collectUrl" type="url" placeholder="https://www.mercado-exemplo.com.br" />
+          </div>
+          <div class="field">
+            <label for="collectMarketName">Nome do mercado</label>
+            <input id="collectMarketName" type="text" placeholder="Ex: Mercado Exemplo" />
+          </div>
+        </div>
+        <div class="section-label">Endereço (opcional, para aparecer no mapa)</div>
+        <div class="addr-grid">
+          <div class="field f-cep">
+            <label for="collectCep">CEP</label>
+            <input id="collectCep" type="text" placeholder="64000-000" maxlength="9" inputmode="numeric" oninput="handleCepInput(this)" />
+          </div>
+          <div class="field f-street">
+            <label for="collectStreet">Logradouro</label>
+            <input id="collectStreet" type="text" placeholder="Rua / Av." />
+          </div>
+          <div class="field f-number">
+            <label for="collectNumber">Número</label>
+            <input id="collectNumber" type="text" placeholder="123" />
+          </div>
+          <div class="field f-neigh">
+            <label for="collectNeighborhood">Bairro</label>
+            <input id="collectNeighborhood" type="text" placeholder="Bairro" />
+          </div>
+          <div class="field f-city">
+            <label for="collectCity">Cidade</label>
+            <input id="collectCity" type="text" placeholder="Cidade" />
+          </div>
+          <div class="field f-uf">
+            <label for="collectState">UF</label>
+            <input id="collectState" type="text" placeholder="PI" maxlength="2" style="text-transform: uppercase;" />
+          </div>
+        </div>
+        <div id="cepStatus"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="collectBtn" onclick="runCollect()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/></svg>Coletar com IA</button>
+        </div>
+        <div id="collectStatus"></div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-head">
+          <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span>
+          <div><h3>Como funciona</h3></div>
+        </div>
+        <ol class="steps">
+          <li><span class="step-n">1</span><div><b>Lê o site</b>O bot abre o link e separa os blocos de produto da página.</div></li>
+          <li><span class="step-n">2</span><div><b>A IA reconhece</b>Nome, marca, tamanho e preço de cada produto.</div></li>
+          <li><span class="step-n">3</span><div><b>Entra no app</b>Os produtos são ligados ao catálogo; os casos duvidosos vão para a revisão.</div></li>
+        </ol>
+        <p class="tip">A coleta pode levar até 1 minuto. Depois, use <b>Recarregar</b> em Mercados para atualizar os preços.</p>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Usuários ----------------------------------------------------------------- -->
+  <div class="page" id="page-usuarios" hidden>
+    <section class="hero-card">
+      <div>
+        <span class="eyebrow-pill">Painel administrativo</span>
+        <h2 class="hero-title">Novo <em>acesso</em></h2>
+        <p class="hero-sub">Crie contas para a equipe do Price ou para empresas parceiras. Não existe autocadastro: os acessos só nascem aqui.</p>
+      </div>
+      <div class="hero-art" data-art="🔐 🤝 🏪"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <span class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>
+        <div>
+          <h3>Cadastrar usuário</h3>
+          <p>A senha precisa ter pelo menos 8 caracteres.</p>
+        </div>
+      </div>
+
+      <div class="field"><span class="label">Tipo de conta</span></div>
+      <div class="seg" role="radiogroup" aria-label="Tipo de conta">
+        <label><input type="radio" name="newUserRole" value="company" checked onchange="toggleCompanyFields()" /><span><i>🏪</i><div><strong>Empresa parceira</strong><small>Cadastra produtos na Página da Empresa</small></div></span></label>
+        <label><input type="radio" name="newUserRole" value="admin" onchange="toggleCompanyFields()" /><span><i>🛡️</i><div><strong>Administrador</strong><small>Acesso completo a este painel</small></div></span></label>
+      </div>
+
+      <div class="grid-2">
         <div class="field">
           <label for="newUserUsername">Usuário</label>
           <input id="newUserUsername" type="text" placeholder="nome-de-usuario" autocomplete="off" />
@@ -398,150 +921,83 @@
         <div class="field">
           <label for="newUserPassword">Senha</label>
           <div class="password-wrap">
-            <input id="newUserPassword" type="password" placeholder="mínimo 8 caracteres" />
+            <input id="newUserPassword" type="password" placeholder="mínimo 8 caracteres" autocomplete="new-password" />
             <button type="button" class="toggle-password" onclick="togglePasswordVisibility('newUserPassword', this)" aria-label="Mostrar senha">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
         </div>
-        <div class="field" style="flex: 0 0 180px; min-width: 160px;">
-          <label for="newUserRole">Tipo de conta</label>
-          <select id="newUserRole" onchange="toggleCompanyFields()">
-            <option value="company">Empresa parceira</option>
-            <option value="admin">Administrador</option>
-          </select>
-        </div>
       </div>
+
       <!-- Only for "Empresa parceira": the market the account belongs to and
            where it is, so the app can show its address and distance. -->
       <div id="companyFields">
-        <div class="section-label company-label">Mercado da empresa e localização (aparece no app)</div>
-        <div class="collect-form">
-          <div class="field">
-            <label for="companyMarketName">Nome do mercado</label>
-            <input id="companyMarketName" type="text" placeholder="Ex: Mercado Exemplo - Centro" list="companyMarketOptions" autocomplete="off" />
-            <datalist id="companyMarketOptions"></datalist>
-          </div>
+        <div class="section-label">Mercado da empresa e localização (aparece no app)</div>
+        <div class="field">
+          <label for="companyMarketName">Nome do mercado</label>
+          <input id="companyMarketName" type="text" placeholder="Ex: Mercado Exemplo - Centro" list="companyMarketOptions" autocomplete="off" />
+          <datalist id="companyMarketOptions"></datalist>
         </div>
-        <div class="collect-form">
-          <div class="field small">
+        <div class="addr-grid">
+          <div class="field f-cep">
             <label for="companyCep">CEP</label>
             <input id="companyCep" type="text" placeholder="64000-000" maxlength="9" inputmode="numeric" oninput="handleCepInput(this, 'company', 'companyCepStatus')" />
           </div>
-          <div class="field medium">
+          <div class="field f-street">
             <label for="companyStreet">Logradouro</label>
             <input id="companyStreet" type="text" placeholder="Rua / Av." />
           </div>
-          <div class="field small">
+          <div class="field f-number">
             <label for="companyNumber">Número</label>
             <input id="companyNumber" type="text" placeholder="123" />
           </div>
-          <div class="field medium">
+          <div class="field f-neigh">
+            <label for="companyNeighborhood">Bairro</label>
+            <input id="companyNeighborhood" type="text" placeholder="Bairro" />
+          </div>
+          <div class="field f-city">
+            <label for="companyCity">Cidade</label>
+            <input id="companyCity" type="text" placeholder="Cidade" />
+          </div>
+          <div class="field f-uf">
+            <label for="companyState">UF</label>
+            <input id="companyState" type="text" placeholder="PI" maxlength="2" style="text-transform: uppercase;" />
+          </div>
+          <div class="field f-comp">
             <label for="companyComplement">Complemento</label>
             <input id="companyComplement" type="text" placeholder="Loja 2 (opcional)" />
           </div>
         </div>
-        <div class="collect-form">
-          <div class="field medium">
-            <label for="companyNeighborhood">Bairro</label>
-            <input id="companyNeighborhood" type="text" placeholder="Bairro" />
-          </div>
-          <div class="field medium">
-            <label for="companyCity">Cidade</label>
-            <input id="companyCity" type="text" placeholder="Cidade" />
-          </div>
-          <div class="field small">
-            <label for="companyState">UF</label>
-            <input id="companyState" type="text" placeholder="PI" maxlength="2" style="text-transform: uppercase;" />
-          </div>
-        </div>
         <div id="companyCepStatus"></div>
       </div>
-      <div class="collect-form user-actions">
-        <button class="primary" id="newUserBtn" onclick="createUser()">Cadastrar</button>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="newUserBtn" onclick="createUser()">Cadastrar usuário</button>
       </div>
       <div id="userStatus"></div>
-    </div>
-  </section>
-
-  <section>
-    <h2>Mercados cadastrados</h2>
-    <div class="toolbar">
-      <input id="marketSearch" type="text" placeholder="Buscar mercado..." oninput="loadMarkets()" />
-    </div>
-    <div id="reloadStatus"></div>
-    <table>
-      <thead>
-        <tr><th>Mercado</th><th>Iniciais</th><th>Cores</th><th>Links</th><th>Origem</th><th>Ações</th></tr>
-      </thead>
-      <tbody id="marketsBody"></tbody>
-    </table>
-  </section>
-
-  <section>
-    <h2>Produtos cadastrados</h2>
-    <div class="toolbar">
-      <input id="productSearch" type="text" placeholder="Buscar produto..." oninput="loadProducts()" />
-      <select id="marketFilter" onchange="loadProducts()">
-        <option value="">Todos os mercados</option>
-      </select>
-      <select id="categoryFilter" onchange="loadProducts()">
-        <option value="">Todas as categorias</option>
-        <option value="HORTIFRUTI">Hortifruti</option>
-        <option value="GRÃOS">Grãos</option>
-        <option value="LATICÍNIOS">Laticínios</option>
-        <option value="CARNES">Carnes</option>
-        <option value="OUTROS">Outros</option>
-      </select>
-      <select id="sourceFilter" onchange="loadProducts()">
-        <option value="">Todas as origens</option>
-        <option value="seed">Demo</option>
-        <option value="company">Empresa parceira</option>
-        <option value="bot">Bot de coleta</option>
-      </select>
-    </div>
-    <table>
-      <thead>
-        <tr><th>Produto</th><th>Categoria</th><th>Unidade</th><th>Preço</th><th>Mercado padrão</th><th>Origem</th><th>Ações</th></tr>
-      </thead>
-      <tbody id="productsBody"></tbody>
-    </table>
-  </section>
-
-  <section>
-    <h2>Produtos possivelmente iguais <span id="suggestionsCount" class="muted-note"></span></h2>
-    <p class="muted-note" style="margin: -4px 0 12px;">
-      Quando o sistema não tem certeza de que dois cadastros são o mesmo produto, ele pergunta aqui.
-      Os casos óbvios (mesma marca, mesmo tamanho) já são ligados sozinhos.
-    </p>
-    <div id="suggestionsList"></div>
-    <div class="toolbar">
-      <button class="ghost" id="catalogMatchBtn" onclick="runCatalogMatch()">Reprocessar catálogo</button>
-      <span id="catalogStatus"></span>
-    </div>
-  </section>
+    </section>
+  </div>
 </main>
 
-<div class="modal-overlay" id="editOverlay" hidden>
-  <div class="modal card">
+<div class="modal-overlay" id="editOverlay" hidden onclick="if (event.target === this) closeEdit()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
     <h3 id="editTitle">Editar</h3>
     <div id="editFields"></div>
     <div id="editStatus"></div>
-    <div class="modal-actions">
-      <button class="ghost" onclick="closeEdit()">Cancelar</button>
-      <button class="primary" id="editSaveBtn" onclick="saveEdit()">Salvar</button>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeEdit()">Cancelar</button>
+      <button class="btn btn-primary" id="editSaveBtn" onclick="saveEdit()">Salvar</button>
     </div>
   </div>
 </div>
 
-<div class="modal-overlay" id="confirmOverlay" hidden>
-  <div class="modal card">
-    <h3>Confirmar exclusão</h3>
+<div class="modal-overlay" id="confirmOverlay" hidden onclick="if (event.target === this) closeConfirm()">
+  <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <h3 id="confirmTitle">Confirmar exclusão</h3>
     <p id="confirmMessage"></p>
     <div id="confirmStatus"></div>
-    <div class="modal-actions">
-      <button class="ghost" onclick="closeConfirm()">Cancelar</button>
-      <button class="danger" id="confirmDeleteBtn" onclick="runConfirmedDelete()">Excluir</button>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeConfirm()">Cancelar</button>
+      <button class="btn btn-danger" id="confirmDeleteBtn" onclick="runConfirmedDelete()">Excluir</button>
     </div>
   </div>
 </div>
@@ -551,8 +1007,22 @@
   const PRICE_AUTH_URL = "http://localhost:8081";
   const COLLECT_API_URL = "http://localhost:8085";
   const SESSION_KEY = "price_admin_session";
+  const THEME_KEY = "price_admin_theme";
 
   const sourceLabel = { seed: "Demo", company: "Empresa", bot: "Bot" };
+  const SOURCE_CHIP = { seed: "gray", company: "amber", bot: "violet" };
+  const CATEGORY_LABEL = { "HORTIFRUTI": "Hortifruti", "GRÃOS": "Grãos", "LATICÍNIOS": "Laticínios", "CARNES": "Carnes", "OUTROS": "Outros" };
+  const CATEGORY_CHIP = { "HORTIFRUTI": "green", "GRÃOS": "amber", "LATICÍNIOS": "blue", "CARNES": "red" };
+
+  const ICONS = {
+    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
+    reload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>',
+    box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>',
+    store: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9 4.5 4h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0Z"/><path d="M5 13v7h14v-7"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    pin: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>',
+  };
 
   function escapeHtml(str) {
     const div = document.createElement("div");
@@ -562,6 +1032,69 @@
 
   function formatBRL(value) {
     return "R$ " + Number(value).toFixed(2).replace(".", ",");
+  }
+
+  // "Mercado Teste" -> "MT"
+  function initialsOf(text) {
+    const words = String(text || "").replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+    return ((words[0]?.[0] || "") + (words[1]?.[0] || "")).toUpperCase() || "?";
+  }
+
+  function emptyState(icon, title, text) {
+    return `<div class="empty-state"><span class="empty-icon">${icon}</span><strong>${escapeHtml(title)}</strong><span>${escapeHtml(text)}</span></div>`;
+  }
+
+  function statChip(text, kind) {
+    return `<span class="stat-chip${kind ? " " + kind : ""}"><span class="dot"></span>${text}</span>`;
+  }
+
+  // Hero illustrations: the Price logo on a blue disc with three emoji chips
+  // (taken from each page's data-art) and loose decorative shapes.
+  function renderHeroArt() {
+    for (const el of document.querySelectorAll(".hero-art[data-art]")) {
+      const [a, b, c] = el.dataset.art.split(" ");
+      el.innerHTML = `
+        <svg class="art-zigzag" viewBox="0 0 56 14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12 9 2l7 10 7-10 7 10 7-10 7 10 7-10"/></svg>
+        <svg class="art-cross x1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg>
+        <svg class="art-cross x2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg>
+        <svg class="art-dots" viewBox="0 0 44 30" fill="currentColor"><circle cx="4" cy="4" r="3"/><circle cx="22" cy="4" r="3"/><circle cx="40" cy="4" r="3"/><circle cx="4" cy="26" r="3"/><circle cx="22" cy="26" r="3"/><circle cx="40" cy="26" r="3"/></svg>
+        <div class="art-ring"></div>
+        <div class="art-blob"></div>
+        <img src="logo-price.svg" class="art-logo" alt="" />
+        <div class="art-chip k1">${a}</div><div class="art-chip k2">${b}</div><div class="art-chip k3">${c}</div>`;
+      el.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  // --- Theme ------------------------------------------------------------------
+  // Only the logged-in pages are themed; the login screen is always light.
+
+  function savedTheme() {
+    try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; }
+  }
+
+  function preferredTheme() {
+    const saved = savedTheme();
+    if (saved === "light" || saved === "dark") return saved;
+    return window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    for (const sw of document.querySelectorAll(".theme-switch")) sw.setAttribute("aria-checked", String(theme === "dark"));
+  }
+
+  function toggleTheme() {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+    applyTheme(next);
+  }
+
+  applyTheme(document.documentElement.dataset.theme || "light");
+  if (window.matchMedia) {
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", e => {
+      if (getSession() && !savedTheme()) applyTheme(e.matches ? "dark" : "light");
+    });
   }
 
   // --- Auth ---------------------------------------------------------------
@@ -613,23 +1146,23 @@
   }
 
   function showApp(session) {
+    applyTheme(preferredTheme());
     document.getElementById("loginScreen").hidden = true;
     document.getElementById("appHeader").hidden = false;
     document.getElementById("app").hidden = false;
-    document.getElementById("whoAmI").hidden = false;
     document.getElementById("whoAmI").textContent = session.user.username;
-    document.getElementById("logoutBtn").hidden = false;
+    document.getElementById("userAvatar").textContent = initialsOf(session.user.username.replace(/[-_.]/g, " "));
+    route();
     loadMarkets();
     loadProducts();
     loadSuggestions();
   }
 
   function showLogin() {
+    applyTheme("light");
     document.getElementById("loginScreen").hidden = false;
     document.getElementById("appHeader").hidden = true;
     document.getElementById("app").hidden = true;
-    document.getElementById("whoAmI").hidden = true;
-    document.getElementById("logoutBtn").hidden = true;
   }
 
   async function login() {
@@ -654,7 +1187,7 @@
       });
       const data = await res.json();
       if (!res.ok) {
-        statusEl.textContent = data.error || "Falha ao entrar.";
+        statusEl.textContent = res.status === 401 ? "Usuário ou senha incorretos." : (data.error || "Falha ao entrar.");
         return;
       }
       if (data.user.role !== "admin") {
@@ -662,6 +1195,7 @@
         return;
       }
       setSession(data, remember);
+      document.getElementById("loginPassword").value = "";
       showApp(data);
     } catch (e) {
       statusEl.textContent = "Não foi possível falar com o servidor de autenticação (price-auth está rodando na porta 8081?).";
@@ -675,10 +1209,40 @@
     showLogin();
   }
 
+  // --- Pages (#mercados, #produtos, #catalogo, #coleta, #usuarios) -----------
+
+  const PAGES = ["mercados", "produtos", "catalogo", "coleta", "usuarios"];
+
+  function route() {
+    if (!getSession()) return;
+    let page = location.hash.slice(1);
+    if (!PAGES.includes(page)) page = "mercados";
+    for (const p of PAGES) document.getElementById("page-" + p).hidden = p !== page;
+    for (const a of document.querySelectorAll("nav.menu a")) {
+      const active = a.dataset.page === page;
+      a.classList.toggle("active", active);
+      if (active) {
+        a.setAttribute("aria-current", "page");
+        a.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } else {
+        a.removeAttribute("aria-current");
+      }
+    }
+    window.scrollTo(0, 0);
+  }
+
+  window.addEventListener("hashchange", route);
+
+  // --- Usuários --------------------------------------------------------------
+
   const COMPANY_FIELDS = ["MarketName", "Cep", "Street", "Number", "Complement", "Neighborhood", "City", "State"];
 
+  function selectedRole() {
+    return document.querySelector('input[name="newUserRole"]:checked').value;
+  }
+
   function toggleCompanyFields() {
-    document.getElementById("companyFields").hidden = document.getElementById("newUserRole").value !== "company";
+    document.getElementById("companyFields").hidden = selectedRole() !== "company";
   }
 
   function readCompanyMarket() {
@@ -718,7 +1282,7 @@
   async function createUser() {
     const username = document.getElementById("newUserUsername").value.trim();
     const password = document.getElementById("newUserPassword").value;
-    const role = document.getElementById("newUserRole").value;
+    const role = selectedRole();
     const statusEl = document.getElementById("userStatus");
     const btn = document.getElementById("newUserBtn");
     const isCompany = role === "company";
@@ -780,7 +1344,7 @@
         statusEl.textContent = `Empresa "${data.username}" criada e ligada ao mercado "${savedMarket.name}", já localizado no mapa — o app mostra o endereço e a distância.`;
       } else {
         statusEl.className = "warn";
-        statusEl.textContent = `Empresa "${data.username}" criada e ligada ao mercado "${savedMarket.name}", mas o endereço não foi localizado no mapa: o app mostra o endereço, sem a distância. Confira o endereço em "Mercados cadastrados" → Editar.`;
+        statusEl.textContent = `Empresa "${data.username}" criada e ligada ao mercado "${savedMarket.name}", mas o endereço não foi localizado no mapa: o app mostra o endereço, sem a distância. Confira o endereço em Mercados → Editar.`;
       }
     } catch (e) {
       statusEl.className = "error";
@@ -790,7 +1354,7 @@
     }
   }
 
-  // --- Data tables ----------------------------------------------------------
+  // --- Mercados ---------------------------------------------------------------
 
   let lastMarkets = [];
   let lastProducts = [];
@@ -801,6 +1365,12 @@
     select.innerHTML = '<option value="">Todos os mercados</option>' +
       markets.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join("");
     if (markets.some(m => m.id === current)) select.value = current;
+  }
+
+  function marketAddress(m) {
+    const street = m.street ? [m.street, m.number].filter(Boolean).join(", ") : "";
+    const cityState = [m.city, m.state].filter(Boolean).join(" - ");
+    return [street, m.neighborhood, cityState].filter(Boolean).join(", ");
   }
 
   async function loadMarkets() {
@@ -814,37 +1384,52 @@
       const res = await fetch(url);
       const markets = await res.json();
       lastMarkets = markets;
-      populateMarketFilter(markets);
+      document.getElementById("marketsCount").textContent = markets.length ? String(markets.length) : "";
       if (!search) {
+        populateMarketFilter(markets);
         // Suggest existing markets in "Novo usuário": picking one ties the
         // company to it (and updates its address) instead of creating another.
         document.getElementById("companyMarketOptions").innerHTML =
           markets.map(m => `<option value="${escapeHtml(m.name)}">`).join("");
+        const noLocation = markets.filter(m => m.has_location === false).length;
+        document.getElementById("marketsStats").innerHTML =
+          statChip(`<strong>${markets.length}</strong> mercados`) +
+          statChip(`<strong>${markets.length - noLocation}</strong> no mapa`, "ok") +
+          (noLocation ? statChip(`<strong>${noLocation}</strong> sem localização`, "warn") : "");
       }
       if (markets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum mercado encontrado.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="5">${emptyState(ICONS.store, "Nenhum mercado encontrado", search ? "Tente buscar por outro nome." : "Use a Coleta com IA para cadastrar o primeiro.")}</td></tr>`;
         return;
       }
-      tbody.innerHTML = markets.map(m => `
+      tbody.innerHTML = markets.map(m => {
+        const address = marketAddress(m);
+        const links = m.links || [];
+        return `
         <tr>
-          <td>${escapeHtml(m.name)}${m.has_location === false ? '<div class="muted-note" title="Sem localização no mapa a distância até o mercado não aparece no app. Edite e confira o endereço.">sem localização</div>' : ''}</td>
-          <td>${escapeHtml(m.initials)}</td>
-          <td><span class="swatch" style="background:${m.primary_color}"></span>${escapeHtml(m.primary_color)}</td>
-          <td class="links-cell">${
-            (m.links && m.links.length > 0)
-              ? `${m.links.length} ${m.links.length === 1 ? "link" : "links"}`
-              : '<span class="muted-note">sem link</span>'
-          }</td>
-          <td><span class="pill ${m.source}">${sourceLabel[m.source] ?? m.source}</span></td>
-          <td class="row-actions">
-            <button class="reload" onclick="reloadMarket('${m.id}')" ${(!m.links || m.links.length === 0) ? "disabled" : ""}>Recarregar</button>
-            <button class="edit" onclick="openEditMarket('${m.id}')">Editar</button>
-            <button class="delete" onclick="deleteMarket('${m.id}')">Excluir</button>
+          <td class="name">
+            <div class="ent">
+              <span class="ent-avatar" style="background:${escapeHtml(m.background_color || "")};color:${escapeHtml(m.primary_color || "")}">${escapeHtml(m.initials)}</span>
+              <div>
+                <div class="ent-name">${escapeHtml(m.name)}</div>
+                <div class="ent-sub">${address ? escapeHtml(address) : "Sem endereço"}</div>
+              </div>
+            </div>
           </td>
-        </tr>
-      `).join("");
+          <td class="muted hide-sm"><span class="swatch" style="background:${escapeHtml(m.primary_color)}"></span>${escapeHtml(m.primary_color)}</td>
+          <td>${links.length > 0
+            ? `<span class="chip blue">${links.length} ${links.length === 1 ? "link" : "links"}</span>`
+            : '<span class="chip gray">sem link</span>'}${m.has_location === false
+            ? ' <span class="chip red" title="Sem localização no mapa a distância até o mercado não aparece no app. Edite e confira o endereço.">sem localização</span>' : ""}</td>
+          <td><span class="chip ${SOURCE_CHIP[m.source] || "gray"}">${sourceLabel[m.source] ?? escapeHtml(m.source)}</span></td>
+          <td class="actions">
+            <button class="icon-btn reload" onclick="reloadMarket('${escapeHtml(m.id)}')" ${links.length === 0 ? "disabled" : ""} title="Recarregar (coletar de novo)" aria-label="Recarregar ${escapeHtml(m.name)}">${ICONS.reload}</button>
+            <button class="icon-btn" onclick="openEditMarket('${escapeHtml(m.id)}')" title="Editar" aria-label="Editar ${escapeHtml(m.name)}">${ICONS.edit}</button>
+            <button class="icon-btn remove" onclick="deleteMarket('${escapeHtml(m.id)}')" title="Excluir" aria-label="Excluir ${escapeHtml(m.name)}">${ICONS.trash}</button>
+          </td>
+        </tr>`;
+      }).join("");
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty">Não foi possível carregar os mercados (price-back está rodando?).</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="5">${emptyState(ICONS.store, "Não foi possível carregar os mercados", "Confira se o price-back está rodando.")}</td></tr>`;
     }
   }
 
@@ -899,11 +1484,14 @@
     loadProducts();
   }
 
+  // --- Produtos ---------------------------------------------------------------
+
   async function loadProducts() {
     const search = document.getElementById("productSearch").value.trim();
     const marketId = document.getElementById("marketFilter").value;
     const category = document.getElementById("categoryFilter").value;
     const source = document.getElementById("sourceFilter").value;
+    const filtered = Boolean(search || marketId || category || source);
 
     const url = new URL(PRICE_BACK_URL + "/api/products");
     if (search) url.searchParams.set("search", search);
@@ -916,30 +1504,46 @@
       const res = await fetch(url);
       const products = await res.json();
       lastProducts = products;
+      document.getElementById("productsCount").textContent = products.length ? String(products.length) : "";
+      if (!filtered) {
+        const by = s => products.filter(p => p.source === s).length;
+        document.getElementById("productsStats").innerHTML =
+          statChip(`<strong>${products.length}</strong> produtos`) +
+          statChip(`<strong>${by("bot")}</strong> do bot`) +
+          statChip(`<strong>${by("company")}</strong> de empresas`, "ok") +
+          (by("seed") ? statChip(`<strong>${by("seed")}</strong> de demonstração`, "warn") : "");
+      }
       if (products.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhum produto encontrado.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="6">${emptyState(ICONS.box, "Nenhum produto encontrado", filtered ? "Tente outros filtros." : "Os produtos coletados ou cadastrados aparecem aqui.")}</td></tr>`;
         return;
       }
       tbody.innerHTML = products.map(p => `
         <tr>
-          <td>${escapeHtml(p.name)}</td>
-          <td>${escapeHtml(p.category)}</td>
-          <td>${escapeHtml(p.unit)}</td>
-          <td>${formatBRL(p.default_price)}</td>
-          <td>${escapeHtml(p.default_market_name)}</td>
-          <td><span class="pill ${p.source}">${sourceLabel[p.source] ?? p.source}</span></td>
-          <td class="row-actions">
-            <button class="edit" onclick="openEditProduct('${p.id}')">Editar</button>
-            <button class="delete" onclick="deleteProduct('${p.id}')">Excluir</button>
+          <td class="name">
+            <div class="ent">
+              <span class="ent-avatar">${escapeHtml(((p.name || "?").trim()[0] || "?").toUpperCase())}</span>
+              <div>
+                <div class="ent-name">${escapeHtml(p.name)}</div>
+                <div class="ent-sub">por ${escapeHtml(p.unit)}${p.size_label ? " · " + escapeHtml(p.size_label) : ""}</div>
+              </div>
+            </div>
+          </td>
+          <td><span class="chip ${CATEGORY_CHIP[p.category] || "gray"}">${escapeHtml(CATEGORY_LABEL[p.category] || p.category)}</span></td>
+          <td class="price">${formatBRL(p.default_price)}</td>
+          <td class="muted">${escapeHtml(p.default_market_name)}</td>
+          <td><span class="chip ${SOURCE_CHIP[p.source] || "gray"}">${sourceLabel[p.source] ?? escapeHtml(p.source)}</span></td>
+          <td class="actions">
+            <button class="icon-btn" onclick="openEditProduct('${escapeHtml(p.id)}')" title="Editar" aria-label="Editar ${escapeHtml(p.name)}">${ICONS.edit}</button>
+            <button class="icon-btn remove" onclick="deleteProduct('${escapeHtml(p.id)}')" title="Excluir" aria-label="Excluir ${escapeHtml(p.name)}">${ICONS.trash}</button>
           </td>
         </tr>
       `).join("");
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty">Não foi possível carregar os produtos (price-back está rodando?).</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="6">${emptyState(ICONS.box, "Não foi possível carregar os produtos", "Confira se o price-back está rodando.")}</td></tr>`;
     }
   }
 
-  // --- Catalog review queue -----------------------------------------------------
+  // --- Catálogo (fila de revisão) ---------------------------------------------
 
   const SUGGESTION_REASON = {
     "brand-missing": "Um dos nomes não traz a marca; o resto é idêntico.",
@@ -949,17 +1553,20 @@
   async function loadSuggestions() {
     const list = document.getElementById("suggestionsList");
     const count = document.getElementById("suggestionsCount");
+    const badge = document.getElementById("navSuggestions");
     try {
       const res = await fetch(`${PRICE_BACK_URL}/api/catalog/suggestions`);
       const suggestions = await res.json();
-      count.textContent = suggestions.length ? `(${suggestions.length} pendente${suggestions.length > 1 ? "s" : ""})` : "";
+      count.textContent = suggestions.length ? String(suggestions.length) : "";
+      badge.textContent = suggestions.length ? String(suggestions.length) : "";
       if (suggestions.length === 0) {
-        list.innerHTML = '<div class="empty card">Nada para revisar.</div>';
+        list.innerHTML = emptyState(ICONS.check, "Nada para revisar", "Todos os produtos já estão ligados ao catálogo.");
         return;
       }
       list.innerHTML = suggestions.map(renderSuggestion).join("");
     } catch (e) {
-      list.innerHTML = '<div class="empty card">Não foi possível carregar as sugestões (price-back está rodando?).</div>';
+      badge.textContent = "";
+      list.innerHTML = emptyState(ICONS.check, "Não foi possível carregar as sugestões", "Confira se o price-back está rodando.");
     }
   }
 
@@ -972,13 +1579,14 @@
       .join("<br>");
     return `
       <div class="sugg" id="sugg-${s.id}">
-        <div class="sugg-reason">${escapeHtml(reason)}${score}</div>
+        <div class="sugg-reason"><span class="chip amber">${escapeHtml(reason)}${score}</span></div>
         <div class="sugg-grid">
           <div class="sugg-col">
             <h4>Este cadastro</h4>
             <div class="name">${escapeHtml(s.product.product_name)}</div>
             <div class="meta">${escapeHtml(s.product.market_name)} · ${formatBRL(s.product.price)}${size}</div>
           </div>
+          <span class="sugg-vs">=?</span>
           <div class="sugg-col">
             <h4>Parece ser o mesmo que</h4>
             <div class="name">${escapeHtml(s.item.name)}</div>
@@ -986,8 +1594,8 @@
           </div>
         </div>
         <div class="sugg-actions">
-          <button class="ghost" onclick="decideSuggestion(${s.id}, false)">Não são o mesmo</button>
-          <button class="primary" onclick="decideSuggestion(${s.id}, true)">São o mesmo produto</button>
+          <button class="btn btn-ghost btn-sm" onclick="decideSuggestion(${s.id}, false)">Não são o mesmo</button>
+          <button class="btn btn-primary btn-sm" onclick="decideSuggestion(${s.id}, true)">${ICONS.check}São o mesmo produto</button>
         </div>
       </div>`;
   }
@@ -1039,10 +1647,9 @@
     editContext = null;
   }
 
-  const COPY_LINK_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-  const TRASH_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
-  const CHECK_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-  const CANCEL_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  const COPY_LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  const CANCEL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
   let linkPendingDeleteIndex = null;
 
   function openEditMarket(id) {
@@ -1054,17 +1661,19 @@
 
     document.getElementById("editTitle").textContent = "Editar mercado";
     document.getElementById("editFields").innerHTML = `
-      <div class="field">
-        <label for="editName">Nome</label>
-        <input id="editName" type="text" value="${escapeHtml(market.name)}" />
-      </div>
-      <div class="field">
-        <label for="editInitials">Iniciais</label>
-        <input id="editInitials" type="text" value="${escapeHtml(market.initials)}" maxlength="2" />
+      <div class="addr-grid">
+        <div class="field f-street">
+          <label for="editName">Nome</label>
+          <input id="editName" type="text" value="${escapeHtml(market.name)}" />
+        </div>
+        <div class="field f-number">
+          <label for="editInitials">Iniciais</label>
+          <input id="editInitials" type="text" value="${escapeHtml(market.initials)}" maxlength="2" />
+        </div>
       </div>
       <div class="field">
         <label for="editPrimaryColor">Cor</label>
-        <input id="editPrimaryColor" type="color" value="${market.primary_color}" />
+        <input id="editPrimaryColor" type="color" value="${escapeHtml(market.primary_color)}" />
       </div>
       <div class="section-label">Endereço</div>
       <div class="addr-grid">
@@ -1099,14 +1708,14 @@
       </div>
       <div id="editCepStatus"></div>
       <div id="editLocationStatus" class="loc-status"></div>
-      <div class="field">
-        <label for="editLinkSearch">Links cadastrados</label>
-        <input id="editLinkSearch" class="edit-links-search" type="search" placeholder="Pesquisar nos links..." autocomplete="off" oninput="renderEditLinksList()" onkeydown="if (event.key === 'Enter') event.preventDefault();" />
+      <div class="section-label">Links cadastrados</div>
+      <div class="links-box">
+        <input id="editLinkSearch" type="search" placeholder="Pesquisar nos links..." autocomplete="off" aria-label="Pesquisar nos links" oninput="renderEditLinksList()" onkeydown="if (event.key === 'Enter') event.preventDefault();" />
         <div id="editLinksCount"></div>
         <div id="editLinksList"></div>
         <div class="edit-links-add">
-          <input id="editNewLink" type="url" placeholder="https://www.novo-link.com.br" onkeydown="if (event.key === 'Enter') { event.preventDefault(); addEditLink(); }" />
-          <button type="button" class="ghost" onclick="addEditLink()">Adicionar</button>
+          <input id="editNewLink" type="url" placeholder="https://www.novo-link.com.br" aria-label="Novo link" onkeydown="if (event.key === 'Enter') { event.preventDefault(); addEditLink(); }" />
+          <button type="button" class="btn btn-outline btn-sm" onclick="addEditLink()">Adicionar</button>
         </div>
         <div id="editLinksStatus"></div>
       </div>
@@ -1142,10 +1751,10 @@
     if (!el) return;
     if (hasLocation) {
       el.className = "loc-status ok";
-      el.textContent = "Localização no mapa: encontrada — a distância até este mercado aparece no app.";
+      el.innerHTML = `${ICONS.pin}<span>Localização no mapa: encontrada — a distância até este mercado aparece no app.</span>`;
     } else {
       el.className = "loc-status warn";
-      el.textContent = "Localização no mapa: não encontrada — informe um endereço válido para a distância aparecer no app.";
+      el.innerHTML = `${ICONS.pin}<span>Localização no mapa: não encontrada — informe um endereço válido para a distância aparecer no app.</span>`;
     }
   }
 
@@ -1177,11 +1786,11 @@
       <div class="edit-links-row">
         <span title="${escapeHtml(l)}">${escapeHtml(l)}</span>
         ${linkPendingDeleteIndex === i ? `
-          <button type="button" class="icon-btn confirm" title="Confirmar exclusão" onclick="removeEditLink(${i})">${CHECK_ICON}</button>
-          <button type="button" class="icon-btn cancel" title="Cancelar" onclick="cancelRemoveEditLink()">${CANCEL_ICON}</button>
+          <button type="button" class="icon-btn confirm" title="Confirmar exclusão" aria-label="Confirmar exclusão" onclick="removeEditLink(${i})">${CHECK_ICON}</button>
+          <button type="button" class="icon-btn" title="Cancelar" aria-label="Cancelar" onclick="cancelRemoveEditLink()">${CANCEL_ICON}</button>
         ` : `
-          <button type="button" class="icon-btn" title="Copiar link" onclick="copyEditLink(${i})">${COPY_LINK_ICON}</button>
-          <button type="button" class="icon-btn danger" title="Remover link" onclick="askRemoveEditLink(${i})">${TRASH_ICON}</button>
+          <button type="button" class="icon-btn" title="Copiar link" aria-label="Copiar link" onclick="copyEditLink(${i})">${COPY_LINK_ICON}</button>
+          <button type="button" class="icon-btn remove" title="Remover link" aria-label="Remover link" onclick="askRemoveEditLink(${i})">${ICONS.trash}</button>
         `}
       </div>
     `).join("");
@@ -1284,20 +1893,22 @@
         <label for="editName">Nome</label>
         <input id="editName" type="text" value="${escapeHtml(product.name)}" />
       </div>
-      <div class="field">
-        <label for="editCategory">Categoria</label>
-        <select id="editCategory">
-          ${["HORTIFRUTI", "GRÃOS", "LATICÍNIOS", "CARNES", "OUTROS"].map(c =>
-            `<option value="${c}" ${c === product.category ? "selected" : ""}>${c}</option>`
-          ).join("")}
-        </select>
+      <div class="grid-2">
+        <div class="field">
+          <label for="editCategory">Categoria</label>
+          <select id="editCategory">
+            ${Object.entries(CATEGORY_LABEL).map(([c, label]) =>
+              `<option value="${c}" ${c === product.category ? "selected" : ""}>${label}</option>`
+            ).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label for="editUnit">Unidade</label>
+          <input id="editUnit" type="text" value="${escapeHtml(product.unit)}" />
+        </div>
       </div>
       <div class="field">
-        <label for="editUnit">Unidade</label>
-        <input id="editUnit" type="text" value="${escapeHtml(product.unit)}" />
-      </div>
-      <div class="field">
-        <label for="editPrice">Preço</label>
+        <label for="editPrice">Preço (R$)</label>
         <input id="editPrice" type="number" step="0.01" min="0.01" value="${product.default_price}" />
       </div>
     `;
@@ -1395,6 +2006,12 @@
     }
   }
 
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if (!document.getElementById("confirmOverlay").hidden) closeConfirm();
+    else if (!document.getElementById("editOverlay").hidden) closeEdit();
+  });
+
   function deleteMarket(id) {
     const market = lastMarkets.find(m => m.id === id);
     const name = market ? market.name : id;
@@ -1442,9 +2059,9 @@
 
   let cepLookupToken = 0;
 
-  // `prefix` selects which form to fill: "collect" (Coleta sob demanda) or
-  // "edit" (market modal) or "company" (Novo usuário, empresa parceira) —
-  // fields are `${prefix}Street`, `${prefix}City`, ...
+  // `prefix` selects which form to fill: "collect" (Coleta com IA), "edit"
+  // (market modal) or "company" (Usuários, empresa parceira) — fields are
+  // `${prefix}Street`, `${prefix}City`, ...
   function handleCepInput(input, prefix = "collect", statusId = "cepStatus") {
     const digits = input.value.replace(/\D/g, "").slice(0, 8);
     input.value = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
@@ -1481,7 +2098,7 @@
     }
   }
 
-  // --- Coleta sob demanda -----------------------------------------------------
+  // --- Coleta com IA -----------------------------------------------------------
 
   async function runCollect() {
     const url = document.getElementById("collectUrl").value.trim();
@@ -1530,6 +2147,7 @@
         `${data.products_inserted} adicionados à tabela.`;
       loadProducts();
       loadMarkets();
+      loadSuggestions();
     } catch (e) {
       statusEl.className = "error";
       statusEl.textContent = "Não foi possível falar com o serviço de coleta (price-bot está rodando na porta 8085?).";
@@ -1538,6 +2156,9 @@
     }
   }
 
+  // --- Start --------------------------------------------------------------------
+
+  renderHeroArt();
   const existingSession = getSession();
   if (existingSession && existingSession.user && existingSession.user.role === "admin") {
     showApp(existingSession);
