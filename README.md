@@ -8,6 +8,17 @@ mercado, e listagem/busca de mercados e produtos cadastrados.
 Não existe autocadastro aqui: contas só são criadas por um admin já
 logado, através da seção "Novo usuário".
 
+Ao cadastrar uma **empresa parceira**, o formulário pede também o mercado
+dela e o endereço (o CEP preenche logradouro, bairro, cidade e UF via
+ViaCEP). O painel salva o mercado no `price-back` (`POST /api/markets`,
+`source: "company"`), que localiza o endereço no mapa, e cria a conta com
+`market_id` apontando para ele. Assim o app mostra o endereço ("Ver
+endereço", "Abrir no mapa") e a distância até o mercado, e a Página da
+Empresa já usa esse mercado. Se já existir um mercado com o mesmo nome,
+a conta é ligada a ele e o endereço é atualizado. Quando o endereço não
+é localizado no mapa, o painel avisa: o app mostra o endereço sem a
+distância, e dá para corrigir em "Mercados cadastrados" → Editar.
+
 ## Depende de
 
 | Serviço | Porta | Para quê |
