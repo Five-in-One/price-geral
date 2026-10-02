@@ -60,7 +60,7 @@ func selfRegisterHandler(repo *repository.UsersRepo, jwtSecret string, role mode
 
 		// Public self-registration never creates an "admin" account — those
 		// can only be created by an existing admin, via POST /auth/admin/users.
-		user, err := repo.Create(r.Context(), username, hash, role)
+		user, err := repo.Create(r.Context(), username, hash, role, nil)
 		if err != nil {
 			if errors.Is(err, repository.ErrUsernameTaken) {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "username already taken"})
@@ -129,6 +129,9 @@ type createUserRequest struct {
 	Username string      `json:"username"`
 	Password string      `json:"password"`
 	Role     models.Role `json:"role"`
+	// MarketID is the price-back market of a "company" account (optional);
+	// rejected for any other role.
+	MarketID string `json:"market_id"`
 }
 
 // createUserHandler lets an authenticated admin create another account —
@@ -157,13 +160,22 @@ func createUserHandler(repo *repository.UsersRepo) http.HandlerFunc {
 			return
 		}
 
+		var marketID *string
+		if id := strings.TrimSpace(body.MarketID); id != "" {
+			if body.Role != models.RoleCompany {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "market_id is only allowed for 'company' accounts"})
+				return
+			}
+			marketID = &id
+		}
+
 		hash, err := auth.HashPassword(body.Password)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to process password"})
 			return
 		}
 
-		user, err := repo.Create(r.Context(), username, hash, body.Role)
+		user, err := repo.Create(r.Context(), username, hash, body.Role, marketID)
 		if err != nil {
 			if errors.Is(err, repository.ErrUsernameTaken) {
 				writeJSON(w, http.StatusConflict, map[string]string{"error": "username already taken"})

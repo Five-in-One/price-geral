@@ -270,6 +270,46 @@ func TestCreateUser_AsAdmin_CanCreateCompanyAccount(t *testing.T) {
 	require.Equal(t, models.RoleCompany, user.Role)
 }
 
+func TestCreateUser_CompanyWithMarket_KeepsMarketThroughLogin(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool, "test-secret")
+	adminToken := loginAsSeededAdmin(t, router)
+
+	rec := doJSONRequest(t, router, http.MethodPost, "/auth/admin/users", map[string]string{
+		"username":  "partner-with-market",
+		"password":  "correct-horse",
+		"role":      "company",
+		"market_id": "mercado-centro-ab12cd",
+	}, adminToken)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	var user models.User
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &user))
+	require.NotNil(t, user.MarketID)
+	require.Equal(t, "mercado-centro-ab12cd", *user.MarketID)
+
+	loginRec := doJSONRequest(t, router, http.MethodPost, "/auth/login", map[string]string{
+		"username": "partner-with-market", "password": "correct-horse",
+	}, "")
+	require.Equal(t, http.StatusOK, loginRec.Code)
+	var resp models.AuthResponse
+	require.NoError(t, json.Unmarshal(loginRec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.User.MarketID)
+	require.Equal(t, "mercado-centro-ab12cd", *resp.User.MarketID)
+}
+
+func TestCreateUser_AdminWithMarket_ReturnsBadRequest(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool, "test-secret")
+	adminToken := loginAsSeededAdmin(t, router)
+
+	rec := doJSONRequest(t, router, http.MethodPost, "/auth/admin/users", map[string]string{
+		"username": "admin-with-market", "password": "correct-horse", "role": "admin", "market_id": "mercado-x",
+	}, adminToken)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 func TestCreateUser_WithoutToken_ReturnsUnauthorized(t *testing.T) {
 	pool := testutil.NewTestPool(t)
 	router := httpserver.NewRouter(pool, "test-secret")

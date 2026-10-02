@@ -20,9 +20,12 @@ func (r Role) IsValid() bool {
 // User is the public-facing representation of an account — never carries
 // the password hash.
 type User struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Role      Role      `json:"role"`
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Role     Role   `json:"role"`
+	// MarketID is the price-back market a "company" account belongs to; nil
+	// for every other account and for companies registered without one.
+	MarketID  *string   `json:"market_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

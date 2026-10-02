@@ -27,14 +27,15 @@ func NewUsersRepo(pool *pgxpool.Pool) *UsersRepo {
 }
 
 // Create inserts a new user with an already-hashed password and the given
-// role, and returns its public representation.
-func (r *UsersRepo) Create(ctx context.Context, username, passwordHash string, role models.Role) (models.User, error) {
+// role, and returns its public representation. marketID ties a "company"
+// account to its price-back market; nil leaves the account without one.
+func (r *UsersRepo) Create(ctx context.Context, username, passwordHash string, role models.Role, marketID *string) (models.User, error) {
 	var u models.User
 	err := r.pool.QueryRow(ctx, `
-		INSERT INTO users (username, password_hash, role)
-		VALUES ($1, $2, $3)
-		RETURNING id, username, role, created_at
-	`, username, passwordHash, role).Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt)
+		INSERT INTO users (username, password_hash, role, market_id)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, username, role, market_id, created_at
+	`, username, passwordHash, role, marketID).Scan(&u.ID, &u.Username, &u.Role, &u.MarketID, &u.CreatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolationCode {
@@ -55,10 +56,10 @@ type credentials struct {
 func (r *UsersRepo) findByUsernameWithHash(ctx context.Context, username string) (credentials, error) {
 	var c credentials
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, username, role, created_at, password_hash
+		SELECT id, username, role, market_id, created_at, password_hash
 		FROM users
 		WHERE username = $1
-	`, username).Scan(&c.User.ID, &c.User.Username, &c.User.Role, &c.User.CreatedAt, &c.PasswordHash)
+	`, username).Scan(&c.User.ID, &c.User.Username, &c.User.Role, &c.User.MarketID, &c.User.CreatedAt, &c.PasswordHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return credentials{}, ErrNotFound
@@ -85,10 +86,10 @@ func (r *UsersRepo) VerifyCredentials(ctx context.Context, username, password st
 func (r *UsersRepo) FindByID(ctx context.Context, id string) (models.User, error) {
 	var u models.User
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, username, role, created_at
+		SELECT id, username, role, market_id, created_at
 		FROM users
 		WHERE id = $1
-	`, id).Scan(&u.ID, &u.Username, &u.Role, &u.CreatedAt)
+	`, id).Scan(&u.ID, &u.Username, &u.Role, &u.MarketID, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.User{}, ErrNotFound
