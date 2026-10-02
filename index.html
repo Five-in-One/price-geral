@@ -64,9 +64,15 @@
   .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 220px; }
   .field.small { flex: 0 0 120px; min-width: 100px; }
   .field.medium { flex: 1 1 160px; min-width: 140px; }
-  #cepStatus { font-size: 12px; margin-top: 2px; }
-  #cepStatus.error { color: var(--red); }
-  #cepStatus.ok { color: var(--primary); }
+  #cepStatus, #companyCepStatus { font-size: 12px; margin-top: 2px; }
+  #cepStatus.error, #companyCepStatus.error { color: var(--red); }
+  #cepStatus.ok, #companyCepStatus.ok { color: var(--primary); }
+  #companyFields { margin-top: 16px; }
+  #companyFields[hidden] { display: none; }
+  #companyFields .collect-form { margin-bottom: 10px; }
+  .company-label { font-size: 12px; color: var(--gray); font-weight: 600; margin-bottom: 8px; }
+  .user-actions { margin-top: 12px; justify-content: flex-end; }
+  #userStatus.warn { color: #B45309; }
 
   #reloadStatus { margin: -4px 0 12px; font-size: 13px; }
   #reloadStatus.error { color: var(--red); }
@@ -400,11 +406,58 @@
         </div>
         <div class="field" style="flex: 0 0 180px; min-width: 160px;">
           <label for="newUserRole">Tipo de conta</label>
-          <select id="newUserRole">
+          <select id="newUserRole" onchange="toggleCompanyFields()">
             <option value="company">Empresa parceira</option>
             <option value="admin">Administrador</option>
           </select>
         </div>
+      </div>
+      <!-- Only for "Empresa parceira": the market the account belongs to and
+           where it is, so the app can show its address and distance. -->
+      <div id="companyFields">
+        <div class="section-label company-label">Mercado da empresa e localização (aparece no app)</div>
+        <div class="collect-form">
+          <div class="field">
+            <label for="companyMarketName">Nome do mercado</label>
+            <input id="companyMarketName" type="text" placeholder="Ex: Mercado Exemplo - Centro" list="companyMarketOptions" autocomplete="off" />
+            <datalist id="companyMarketOptions"></datalist>
+          </div>
+        </div>
+        <div class="collect-form">
+          <div class="field small">
+            <label for="companyCep">CEP</label>
+            <input id="companyCep" type="text" placeholder="64000-000" maxlength="9" inputmode="numeric" oninput="handleCepInput(this, 'company', 'companyCepStatus')" />
+          </div>
+          <div class="field medium">
+            <label for="companyStreet">Logradouro</label>
+            <input id="companyStreet" type="text" placeholder="Rua / Av." />
+          </div>
+          <div class="field small">
+            <label for="companyNumber">Número</label>
+            <input id="companyNumber" type="text" placeholder="123" />
+          </div>
+          <div class="field medium">
+            <label for="companyComplement">Complemento</label>
+            <input id="companyComplement" type="text" placeholder="Loja 2 (opcional)" />
+          </div>
+        </div>
+        <div class="collect-form">
+          <div class="field medium">
+            <label for="companyNeighborhood">Bairro</label>
+            <input id="companyNeighborhood" type="text" placeholder="Bairro" />
+          </div>
+          <div class="field medium">
+            <label for="companyCity">Cidade</label>
+            <input id="companyCity" type="text" placeholder="Cidade" />
+          </div>
+          <div class="field small">
+            <label for="companyState">UF</label>
+            <input id="companyState" type="text" placeholder="PI" maxlength="2" style="text-transform: uppercase;" />
+          </div>
+        </div>
+        <div id="companyCepStatus"></div>
+      </div>
+      <div class="collect-form user-actions">
         <button class="primary" id="newUserBtn" onclick="createUser()">Cadastrar</button>
       </div>
       <div id="userStatus"></div>
@@ -622,12 +675,53 @@
     showLogin();
   }
 
+  const COMPANY_FIELDS = ["MarketName", "Cep", "Street", "Number", "Complement", "Neighborhood", "City", "State"];
+
+  function toggleCompanyFields() {
+    document.getElementById("companyFields").hidden = document.getElementById("newUserRole").value !== "company";
+  }
+
+  function readCompanyMarket() {
+    const v = id => document.getElementById("company" + id).value.trim();
+    return {
+      name: v("MarketName"),
+      source: "company",
+      cep: v("Cep"),
+      street: v("Street"),
+      number: v("Number"),
+      complement: v("Complement"),
+      neighborhood: v("Neighborhood"),
+      city: v("City"),
+      state: v("State").toUpperCase(),
+    };
+  }
+
+  // Registers (or reuses, by name) the company's market in price-back with its
+  // address; price-back locates the address on the map so the app can show the
+  // distance. Returns the market, or throws with a message for the admin.
+  async function saveCompanyMarket(market) {
+    let res;
+    try {
+      res = await fetch(PRICE_BACK_URL + "/api/markets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(market),
+      });
+    } catch (e) {
+      throw new Error("Não foi possível falar com o price-back (está rodando na porta 8080?).");
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error("Não foi possível salvar o mercado: " + (data.error || res.statusText));
+    return data;
+  }
+
   async function createUser() {
     const username = document.getElementById("newUserUsername").value.trim();
     const password = document.getElementById("newUserPassword").value;
     const role = document.getElementById("newUserRole").value;
     const statusEl = document.getElementById("userStatus");
     const btn = document.getElementById("newUserBtn");
+    const isCompany = role === "company";
 
     statusEl.className = "";
     if (!username || password.length < 8) {
@@ -636,23 +730,58 @@
       return;
     }
 
+    const market = isCompany ? readCompanyMarket() : null;
+    if (isCompany && (!market.name || !market.street || !market.number || !market.city || !market.state)) {
+      statusEl.className = "error";
+      statusEl.textContent = "Para empresa parceira, informe o nome do mercado e o endereço (logradouro, número, cidade e UF). Digite o CEP para preencher o resto.";
+      return;
+    }
+
     btn.disabled = true;
     try {
+      let savedMarket = null;
+      if (isCompany) {
+        statusEl.textContent = "Salvando o mercado e localizando o endereço no mapa... pode levar alguns segundos.";
+        try {
+          savedMarket = await saveCompanyMarket(market);
+        } catch (e) {
+          statusEl.className = "error";
+          statusEl.textContent = e.message;
+          return;
+        }
+      }
+
       const res = await fetch(PRICE_AUTH_URL + "/auth/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeader() },
-        body: JSON.stringify({ username, password, role }),
+        body: JSON.stringify({ username, password, role, ...(savedMarket ? { market_id: savedMarket.id } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) {
         statusEl.className = "error";
         statusEl.textContent = data.error || "Não foi possível criar o usuário.";
+        if (savedMarket) loadMarkets(); // the market was saved even so; it shows up in the table
         return;
       }
-      statusEl.className = "ok";
-      statusEl.textContent = `Usuário "${data.username}" (${data.role === "admin" ? "administrador" : "empresa parceira"}) criado com sucesso.`;
+
       document.getElementById("newUserUsername").value = "";
       document.getElementById("newUserPassword").value = "";
+      if (!savedMarket) {
+        statusEl.className = "ok";
+        statusEl.textContent = `Usuário "${data.username}" (administrador) criado com sucesso.`;
+        return;
+      }
+
+      for (const id of COMPANY_FIELDS) document.getElementById("company" + id).value = "";
+      document.getElementById("companyCepStatus").textContent = "";
+      loadMarkets();
+      if (savedMarket.has_location) {
+        statusEl.className = "ok";
+        statusEl.textContent = `Empresa "${data.username}" criada e ligada ao mercado "${savedMarket.name}", já localizado no mapa — o app mostra o endereço e a distância.`;
+      } else {
+        statusEl.className = "warn";
+        statusEl.textContent = `Empresa "${data.username}" criada e ligada ao mercado "${savedMarket.name}", mas o endereço não foi localizado no mapa: o app mostra o endereço, sem a distância. Confira o endereço em "Mercados cadastrados" → Editar.`;
+      }
     } catch (e) {
       statusEl.className = "error";
       statusEl.textContent = "Não foi possível falar com o servidor de autenticação (price-auth está rodando na porta 8081?).";
@@ -686,6 +815,12 @@
       const markets = await res.json();
       lastMarkets = markets;
       populateMarketFilter(markets);
+      if (!search) {
+        // Suggest existing markets in "Novo usuário": picking one ties the
+        // company to it (and updates its address) instead of creating another.
+        document.getElementById("companyMarketOptions").innerHTML =
+          markets.map(m => `<option value="${escapeHtml(m.name)}">`).join("");
+      }
       if (markets.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum mercado encontrado.</td></tr>';
         return;
@@ -1308,7 +1443,8 @@
   let cepLookupToken = 0;
 
   // `prefix` selects which form to fill: "collect" (Coleta sob demanda) or
-  // "edit" (market modal) — fields are `${prefix}Street`, `${prefix}City`, ...
+  // "edit" (market modal) or "company" (Novo usuário, empresa parceira) —
+  // fields are `${prefix}Street`, `${prefix}City`, ...
   function handleCepInput(input, prefix = "collect", statusId = "cepStatus") {
     const digits = input.value.replace(/\D/g, "").slice(0, 8);
     input.value = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
