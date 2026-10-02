@@ -56,7 +56,7 @@ go test ./...
 | POST | `/auth/signup` | `{username,password}` → cria a conta como `role: "user"` (quem usa o app) e retorna `access_token` + usuário. É o cadastro do app Flutter |
 | POST | `/auth/login` | `{username,password}` → retorna `access_token` + usuário (com `role`) |
 | GET | `/auth/me` | `Authorization: Bearer <token>` → retorna o usuário autenticado |
-| POST | `/auth/admin/users` | **admin only** — `{username,password,role}` → cria uma conta com o `role` pedido (`admin`, `company` ou `user`) |
+| POST | `/auth/admin/users` | **admin only** — `{username,password,role,market_id?}` → cria uma conta com o `role` pedido (`admin`, `company` ou `user`). `market_id` (só para `company`) liga a empresa ao seu mercado no `price-back`; volta no usuário de `/auth/login` e `/auth/me` |
 
 `username` é normalizado para minúsculas e precisa ter entre 3 e 32
 caracteres, sem espaços. O token é um JWT HS256 (`user_id`, `username`,
