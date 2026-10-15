@@ -20,6 +20,14 @@ def build_parser() -> argparse.ArgumentParser:
         "track",
         help="Busca interativa por um termo e compara preços entre lojas usando IA.",
     )
+    subparsers.add_parser(
+        "worker",
+        help="Consome pedidos de coleta da fila 'bot.collect' no RabbitMQ.",
+    )
+    subparsers.add_parser(
+        "audit",
+        help="Assina os eventos 'collect.*' do RabbitMQ e só os registra no log.",
+    )
 
     return parser
 
@@ -32,6 +40,14 @@ def main(argv: list[str] | None = None) -> None:
         extractor.main()
     elif args.comando == "track":
         tracker.main()
+    elif args.comando == "worker":
+        from nextprice import worker
+
+        worker.main()
+    elif args.comando == "audit":
+        from nextprice import worker
+
+        worker.audit_main()
 
 
 if __name__ == "__main__":

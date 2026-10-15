@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import httpx
@@ -281,41 +282,56 @@ def push_to_price_back(
     return inserted
 
 
-@app.post("/collect", response_model=CollectResponse)
-def collect(payload: CollectRequest) -> CollectResponse:
-    logger.info("[%s] Coleta solicitada — url=%s", payload.market_name, payload.url)
-    register_market(payload)
+class CollectError(Exception):
+    """The market's page could not be opened (site down, timeout...)."""
 
-    store = find_store_by_url(payload.url)
+
+@dataclass
+class CollectResult:
+    blocks_found: int
+    products_extracted: int
+    inserted: list[dict]
+
+
+def run_collection(market_name: str, url: str) -> CollectResult:
+    """One full collection of a market link: scrape (CSS selectors for a
+    known store, AI over text blocks otherwise), drop banners and unreadable
+    prices, save the raw result and push the products to price-back.
+
+    Shared by the synchronous POST /collect and the broker worker
+    (nextprice.worker). Raises CollectError when the page can't be opened;
+    the market itself must already be registered in price-back.
+    """
+    store = find_store_by_url(url)
 
     if store is not None:
         logger.info(
-            "[%s] Loja conhecida (%s) — usando seletores CSS registrados.", payload.market_name, store.key
+            "[%s] Loja conhecida (%s) — usando seletores CSS registrados.", market_name, store.key
         )
         try:
-            produtos_brutos = scrape_known_store(payload.url, store)
+            produtos_brutos = scrape_known_store(url, store)
         except Exception as exc:
-            logger.error("[%s] Falha ao acessar a URL: %s", payload.market_name, exc, exc_info=True)
-            raise HTTPException(status_code=502, detail=f"Falha ao acessar a URL: {exc}") from exc
+            logger.error("[%s] Falha ao acessar a URL: %s", market_name, exc, exc_info=True)
+            raise CollectError(f"Falha ao acessar a URL: {exc}") from exc
         blocks_found = len(produtos_brutos)
-        logger.info("[%s] %d produtos encontrados na página.", payload.market_name, blocks_found)
-        produtos = classify_products(payload.market_name, produtos_brutos)
-        logger.info("[%s] %d produtos classificados (categoria/unidade).", payload.market_name, len(produtos))
-    else:
+        logger.info("[%s] %d produtos encontrados na página.", market_name, blocks_found)
+        produtos = classify_products(market_name, produtos_brutos)
         logger.info(
-            "[%s] Loja não registrada — usando extração genérica via IA.", payload.market_name
+            "[%s] %d produtos classificados (categoria/unidade).", market_name, len(produtos)
         )
+    else:
+        logger.info("[%s] Loja não registrada — usando extração genérica via IA.", market_name)
         try:
-            blocks = scrape_blocks(payload.url)
+            blocks = scrape_blocks(url)
         except Exception as exc:
-            logger.error("[%s] Falha ao acessar a URL: %s", payload.market_name, exc, exc_info=True)
-            raise HTTPException(status_code=502, detail=f"Falha ao acessar a URL: {exc}") from exc
+            logger.error("[%s] Falha ao acessar a URL: %s", market_name, exc, exc_info=True)
+            raise CollectError(f"Falha ao acessar a URL: {exc}") from exc
         blocks_found = len(blocks)
-        logger.info("[%s] %d blocos de texto coletados da página.", payload.market_name, blocks_found)
+        logger.info("[%s] %d blocos de texto coletados da página.", market_name, blocks_found)
         ai_client = GeminiClient()
-        produtos = ai_client.extract_products_generic(payload.market_name, blocks)
+        produtos = ai_client.extract_products_generic(market_name, blocks)
         logger.info(
-            "[%s] IA reconheceu %d produtos a partir dos blocos.", payload.market_name, len(produtos)
+            "[%s] IA reconheceu %d produtos a partir dos blocos.", market_name, len(produtos)
         )
 
     # Vitrine banners ("↪️ Atacado SUPER!") come through the same selectors and,
@@ -324,7 +340,7 @@ def collect(payload: CollectRequest) -> CollectResponse:
     if len(reais) < len(produtos):
         logger.info(
             "[%s] %d banners/rótulos de vitrine descartados.",
-            payload.market_name,
+            market_name,
             len(produtos) - len(reais),
         )
     produtos = reais
@@ -339,32 +355,49 @@ def collect(payload: CollectRequest) -> CollectResponse:
     if len(validos) < len(produtos):
         logger.info(
             "[%s] %d produtos descartados por preço inválido/ilegível.",
-            payload.market_name,
+            market_name,
             len(produtos) - len(validos),
         )
 
-    save_raw_scrape(payload.market_name, payload.url, produtos)
+    save_raw_scrape(market_name, url, produtos)
     collected_at = datetime.now(timezone.utc).isoformat()
-    inserted = push_to_price_back(payload.market_name, validos, collected_at=collected_at)
+    inserted = push_to_price_back(market_name, validos, collected_at=collected_at)
 
     logger.info(
         "[%s] Coleta concluída: %d encontrados, %d extraídos, %d inseridos em price-back.",
-        payload.market_name,
+        market_name,
         blocks_found,
         len(produtos),
         len(inserted),
     )
+    return CollectResult(
+        blocks_found=blocks_found, products_extracted=len(produtos), inserted=inserted
+    )
+
+
+@app.post("/collect", response_model=CollectResponse)
+def collect(payload: CollectRequest) -> CollectResponse:
+    """Synchronous collection, kept for local use. The Admin panel now goes
+    through price-back's POST /api/admin/collect, which answers 202 and
+    hands the work to nextprice.worker via the message broker."""
+    logger.info("[%s] Coleta solicitada — url=%s", payload.market_name, payload.url)
+    register_market(payload)
+
+    try:
+        result = run_collection(payload.market_name, payload.url)
+    except CollectError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return CollectResponse(
         market_name=payload.market_name,
-        blocks_found=blocks_found,
-        products_extracted=len(produtos),
-        products_inserted=len(inserted),
+        blocks_found=result.blocks_found,
+        products_extracted=result.products_extracted,
+        products_inserted=len(result.inserted),
         products=[
             CollectedProduct(
                 name=p["name"], price=p["default_price"], category=p["category"], unit=p["unit"]
             )
-            for p in inserted
+            for p in result.inserted
         ],
     )
 

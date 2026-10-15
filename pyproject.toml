@@ -11,6 +11,7 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "httpx>=0.27",
+    "pika>=1.3",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +26,8 @@ nextprice = "nextprice.cli.main:main"
 nextprice-extract = "nextprice.cli.extractor:main"
 nextprice-track = "nextprice.cli.tracker:main"
 nextprice-collect-api = "nextprice.collect_api:main"
+nextprice-worker = "nextprice.worker:main"
+nextprice-audit = "nextprice.worker:audit_main"
 
 [build-system]
 requires = ["hatchling"]

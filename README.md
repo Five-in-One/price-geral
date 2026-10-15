@@ -240,7 +240,18 @@ dois fluxos como subcomandos:
 | --- | --- | --- |
 | `python main.py extract` | Varre a vitrine de todas as lojas cadastradas | Arquivos em `dados_supermercados/<loja>_<data>.json` |
 | `python main.py track` | Pede um termo de busca e compara preços entre lojas | Comparativo impresso no terminal |
+| `python main.py worker` | Consome pedidos de coleta da fila `bot.collect` (RabbitMQ) | Log do terminal; produtos no price-back |
+| `python main.py audit` | Assina todos os eventos `collect.*` e só os registra | Log do terminal |
 | `python main.py --help` | Lista os subcomandos disponíveis | Ajuda impressa no terminal |
+
+**Worker de coleta (Entrega 3 — comunicação assíncrona):** o Painel Admin
+pede a coleta ao `price-back`, que responde 202 e publica `collect.requested`
+na exchange `price.events`. O worker (`src/nextprice/worker.py`) recebe a
+mensagem, roda a mesma coleta do `POST /collect` e publica
+`collect.finished` com o resultado. Rode quantos workers quiser (um por
+terminal) para dividir a carga. Precisa do RabbitMQ do `docker compose` do
+price-back e de `RABBITMQ_URL` no `.env`. Mensagens inválidas vão para a
+fila `bot.collect.dlq`.
 
 Os scripts `extrator.py` e `querytracker.py` continuam funcionando como
 atalhos diretos para cada fluxo individual, se preferir:
