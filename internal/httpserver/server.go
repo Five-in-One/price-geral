@@ -7,14 +7,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"priceback/internal/geo"
+	"priceback/internal/messaging"
+	"priceback/internal/repository"
+	"priceback/internal/service"
 )
 
 // Option customizes the router built by NewRouter.
 type Option func(*routerConfig)
 
 type routerConfig struct {
-	geocoder geo.Geocoder
-	reverse  geo.ReverseGeocoder
+	geocoder  geo.Geocoder
+	reverse   geo.ReverseGeocoder
+	publisher messaging.Publisher
 }
 
 // WithGeocoder turns on address geocoding: markets registered with an
@@ -29,6 +33,13 @@ func WithGeocoder(g geo.Geocoder) Option {
 // show the address of the device's position. Without it that route answers 503.
 func WithReverseGeocoder(g geo.ReverseGeocoder) Option {
 	return func(c *routerConfig) { c.reverse = g }
+}
+
+// WithPublisher turns on the asynchronous collection routes, which publish
+// collect.requested events to the message broker. Without it those routes
+// answer 503.
+func WithPublisher(p messaging.Publisher) Option {
+	return func(c *routerConfig) { c.publisher = p }
 }
 
 // NewRouter builds the full HTTP router for the API, wiring every route
@@ -55,12 +66,21 @@ func NewRouter(pool *pgxpool.Pool, opts ...Option) *chi.Mux {
 
 	r.Get("/health", healthHandler(pool))
 
+	collect := &collectHandlers{
+		service: service.NewCollectService(
+			repository.NewMarketsRepo(pool), repository.NewCollectJobsRepo(pool), cfg.publisher,
+		),
+		geocoder: cfg.geocoder,
+	}
+
 	r.Route("/api", func(api chi.Router) {
-		api.Mount("/markets", marketsRouter(pool, cfg.geocoder))
+		api.Mount("/markets", marketsRouter(pool, cfg.geocoder, collect))
 		api.Mount("/products", productsRouter(pool))
 		api.Mount("/comparisons", comparisonsRouter(pool))
 		api.Mount("/catalog", catalogRouter(pool))
 		api.Mount("/geocode", geocodeRouter(cfg.reverse))
+		api.Post("/admin/collect", collect.requireBroker(collect.collect))
+		api.Get("/collect/jobs/{id}", collect.getJob)
 	})
 
 	return r

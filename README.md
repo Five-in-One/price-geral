@@ -5,6 +5,56 @@ em Docker. Cuida só de mercados, produtos e comparação de preços — login
 fica em `price-auth` e histórico/economia do usuário em `price-user`
 (ambos serviços separados que compartilham este mesmo Postgres).
 
+## Entrega 3 — Comunicação assíncrona (DSD 2026.2)
+
+O fluxo **"Coletar mercado"** do Painel Admin deixou de ser uma chamada REST
+síncrona ao bot (que levava minutos e falhava se o bot estivesse fora do ar)
+e passou a usar **RabbitMQ**. Os detalhes estão em
+[Coleta assíncrona (RabbitMQ)](#coleta-assíncrona-rabbitmq).
+
+| Papel | Onde | Repositório |
+| --- | --- | --- |
+| Broker | RabbitMQ no `docker-compose.yml` | este |
+| **Produtor** | `POST /api/admin/collect`: Controller `internal/httpserver/collect.go` → Service `internal/service/collect.go` (salva mercado + job no banco e publica `collect.requested`) → **202 Accepted** | este |
+| **Consumidor** | Worker na fila `bot.collect`: `src/nextprice/worker.py` desserializa o DTO e chama o service `run_collection` | [price-bot](https://github.com/Five-in-One/price-bot) |
+| Retorno do resultado | `collect.finished` → consumer `internal/messaging/consumer.go` → Service fecha o job | este |
+| Painel | "Coletar"/"Recarregar" recebem 202 e consultam o job a cada 2s | [price-front-admin](https://github.com/Five-in-One/price-front-admin) |
+
+**Padrões de distribuição:**
+- **Point-to-Point:** vários workers na mesma fila `bot.collect` (`prefetch=1`). Cada mensagem vai para um só, com balanceamento de carga.
+- **Publish/Subscribe:** a exchange `price.events` é do tipo *topic*. A fila `audit.collect` (`python main.py audit`) assina `collect.*` e recebe uma cópia de todos os eventos, sem afetar os workers.
+
+O produtor só conhece a exchange `price.events` e a routing key. Ele não sabe
+quais filas ou serviços consomem o evento.
+
+### Como rodar a demonstração
+
+```bash
+# 1. Broker + banco (neste repo)
+docker compose up -d
+# 2. API (neste repo) — porta 8080
+go run ./cmd/api
+# 3. Dois workers + o assinante de auditoria (no repo price-bot, um por terminal)
+python main.py worker
+python main.py worker
+python main.py audit
+# 4. Painel (repo price-front-admin) — http://localhost:8090, com price-auth na 8081
+python -m http.server 8090
+```
+
+Para ver acontecendo:
+- **202 na hora:** clique em "Coletar" no painel. O pedido é aceito na hora e a coleta roda em segundo plano.
+- **Balanceamento:** dispare vários pedidos ou um "Recarregar". Os logs mostram os jobs divididos entre os workers (`[worker pid=...]`).
+- **Resiliência:** derrube os workers e peça uma coleta. Ainda vem 202, e a mensagem fica parada em `bot.collect` (veja em http://localhost:15672, guest/guest). Suba um worker e ela é processada.
+
+Teste sem o painel:
+
+```bash
+curl -X POST localhost:8080/api/admin/collect -H "Content-Type: application/json" \
+  -d '{"market_name":"Mercado Teste","url":"https://exemplo.com.br/ofertas"}'
+curl localhost:8080/api/collect/jobs/<job_id>
+```
+
 ## Subir o banco
 
 ```bash
@@ -15,6 +65,38 @@ Isso sobe o Postgres compartilhado pelos três serviços (`price-back`,
 `price-auth`, `price-user`) e cria os bancos de cada um: `price_db` /
 `price_db_test` (este serviço), `price_auth_db` / `price_auth_db_test` e
 `price_user_db` / `price_user_db_test`.
+
+O mesmo compose sobe o **RabbitMQ** (`5672`; painel em
+http://localhost:15672, usuário/senha `guest`), usado na coleta assíncrona
+(veja abaixo).
+
+## Coleta assíncrona (RabbitMQ)
+
+A coleta pedida pelo Painel Admin não roda mais dentro da requisição HTTP:
+
+```
+POST /api/admin/collect ──▶ price-back: salva mercado + job "queued"
+                            publica collect.requested ──▶ exchange price.events (topic)
+                            responde 202 + job                  │
+                                                                ├─▶ fila bot.collect  ─▶ workers do price-bot (point-to-point)
+                                                                └─▶ fila audit.collect ─▶ price-bot audit (pub/sub, só log)
+price-bot worker: coleta, publica collect.finished ──▶ fila back.collect-status ─▶ price-back fecha o job
+GET /api/collect/jobs/{id} ◀── o painel consulta a cada 2s
+```
+
+- O `price-back` só conhece a exchange e a routing key, nunca quem consome.
+- Vários workers (`python main.py worker` no price-bot) dividem a fila
+  `bot.collect`: cada mensagem vai para um só (`prefetch=1`).
+- Com o bot desligado, o pedido continua recebendo 202 e a mensagem espera
+  na fila até um worker subir.
+- Código: `internal/messaging` (broker, eventos, consumer), `internal/service/collect.go` (regras) e
+  `internal/httpserver/collect.go` (rotas).
+
+| Rota | Resposta |
+| --- | --- |
+| `POST /api/admin/collect` `{url, market_name, cep?, street?, ...}` | **202** `{market, job}` · 409 `collect_in_progress` (traz o job existente) · 503 `broker_unavailable` |
+| `POST /api/markets/{id}/collect` ("Recarregar") | **202** `{market_id, jobs}`, um job por link |
+| `GET /api/collect/jobs/{id}` | `{id, status: queued\|succeeded\|failed, products_inserted, error, ...}` |
 
 ## Rodar a API
 

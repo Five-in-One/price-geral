@@ -22,5 +22,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # Message broker for the async flows between services (see
+  # internal/messaging). Port 15672 is the management UI (guest/guest).
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: price_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - price_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
 volumes:
   price_back_pgdata:
+  price_rabbitmq_data:

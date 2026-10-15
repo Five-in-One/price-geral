@@ -11,6 +11,9 @@ import (
 	"priceback/internal/db"
 	"priceback/internal/geo"
 	"priceback/internal/httpserver"
+	"priceback/internal/messaging"
+	"priceback/internal/repository"
+	"priceback/internal/service"
 )
 
 func main() {
@@ -27,11 +30,22 @@ func main() {
 	}
 	defer pool.Close()
 
+	// The broker is dialed lazily: price-back starts even if RabbitMQ is
+	// still down, and the consumer keeps retrying until it comes up.
+	broker := messaging.NewBroker(cfg.RabbitMQURL)
+	defer broker.Close()
+	// The consumer hands each collect.finished event to the service layer.
+	collectService := service.NewCollectService(
+		repository.NewMarketsRepo(pool), repository.NewCollectJobsRepo(pool), broker,
+	)
+	go messaging.ConsumeCollectFinished(ctx, broker, collectService)
+
 	// One client for both directions, so they share Nominatim's rate limit.
 	nominatim := geo.NewNominatim("PriceApp/1.0 (projeto-faculdade; price-back)")
 	router := httpserver.NewRouter(pool,
 		httpserver.WithGeocoder(nominatim),
 		httpserver.WithReverseGeocoder(nominatim),
+		httpserver.WithPublisher(broker),
 	)
 
 	log.Printf("price-back listening on :%s", cfg.Port)

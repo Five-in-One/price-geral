@@ -25,7 +25,7 @@ const (
 	defaultRadiusKm = 5.0
 )
 
-func marketsRouter(pool *pgxpool.Pool, geocoder geo.Geocoder) chi.Router {
+func marketsRouter(pool *pgxpool.Pool, geocoder geo.Geocoder, collect *collectHandlers) chi.Router {
 	repo := repository.NewMarketsRepo(pool)
 
 	r := chi.NewRouter()
@@ -35,6 +35,7 @@ func marketsRouter(pool *pgxpool.Pool, geocoder geo.Geocoder) chi.Router {
 	r.Delete("/{id}", deleteMarketHandler(repo))
 	r.Post("/{id}/links", addMarketLinkHandler(repo))
 	r.Delete("/{id}/links", removeMarketLinkHandler(repo))
+	r.Post("/{id}/collect", collect.requireBroker(collect.reload))
 	return r
 }
 
@@ -151,58 +152,65 @@ func createMarketHandler(repo *repository.MarketsRepo, geocoder geo.Geocoder) ht
 			return
 		}
 
-		lat, lng := defaultUserLat, defaultUserLng
-		hasLocation := false
-		if body.Latitude != nil && body.Longitude != nil {
-			lat, lng, hasLocation = *body.Latitude, *body.Longitude, true
-		} else if pt, ok := geocodeAddress(req.Context(), geocoder, name, geo.Address{
-			CEP:          strings.TrimSpace(body.CEP),
-			Street:       strings.TrimSpace(body.Street),
-			Number:       strings.TrimSpace(body.Number),
-			Neighborhood: strings.TrimSpace(body.Neighborhood),
-			City:         strings.TrimSpace(body.City),
-			State:        strings.TrimSpace(body.State),
-		}); ok {
-			// Coordinates weren't sent: derived from the address so the
-			// distance shown to users is real. A failed lookup is not fatal —
-			// the market is still registered, just without a location.
-			lat, lng, hasLocation = pt.Lat, pt.Lng, true
-		}
-
-		initials := body.Initials
-		if initials == "" {
-			initials = deriveInitials(name)
-		}
-
-		primary, background := body.PrimaryColor, body.BackgroundColor
-		if primary == "" || background == "" {
-			primary, background = pickPalette(name)
-		}
-
-		market, err := repo.FindOrCreate(req.Context(), repository.CreateMarketInput{
-			Name:            name,
-			Initials:        initials,
-			Latitude:        lat,
-			Longitude:       lng,
-			HasLocation:     hasLocation,
-			PrimaryColor:    primary,
-			BackgroundColor: background,
-			Source:          source,
-			Link:            strings.TrimSpace(body.Link),
-			CEP:             strings.TrimSpace(body.CEP),
-			Street:          strings.TrimSpace(body.Street),
-			Number:          strings.TrimSpace(body.Number),
-			Neighborhood:    strings.TrimSpace(body.Neighborhood),
-			City:            strings.TrimSpace(body.City),
-			State:           strings.TrimSpace(body.State),
-			Complement:      strings.TrimSpace(body.Complement),
-		})
+		market, err := repo.FindOrCreate(req.Context(), marketInput(req.Context(), geocoder, name, source, body))
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create market"})
 			return
 		}
 
 		writeJSON(w, http.StatusCreated, market)
+	}
+}
+
+// marketInput turns a market registration body into the repository input:
+// coordinates come from the body or from geocoding the address, and
+// initials and colors are derived from the name when not sent.
+func marketInput(ctx context.Context, geocoder geo.Geocoder, name, source string, body createMarketRequest) repository.CreateMarketInput {
+	lat, lng := defaultUserLat, defaultUserLng
+	hasLocation := false
+	if body.Latitude != nil && body.Longitude != nil {
+		lat, lng, hasLocation = *body.Latitude, *body.Longitude, true
+	} else if pt, ok := geocodeAddress(ctx, geocoder, name, geo.Address{
+		CEP:          strings.TrimSpace(body.CEP),
+		Street:       strings.TrimSpace(body.Street),
+		Number:       strings.TrimSpace(body.Number),
+		Neighborhood: strings.TrimSpace(body.Neighborhood),
+		City:         strings.TrimSpace(body.City),
+		State:        strings.TrimSpace(body.State),
+	}); ok {
+		// Coordinates weren't sent: derived from the address so the
+		// distance shown to users is real. A failed lookup is not fatal —
+		// the market is still registered, just without a location.
+		lat, lng, hasLocation = pt.Lat, pt.Lng, true
+	}
+
+	initials := body.Initials
+	if initials == "" {
+		initials = deriveInitials(name)
+	}
+
+	primary, background := body.PrimaryColor, body.BackgroundColor
+	if primary == "" || background == "" {
+		primary, background = pickPalette(name)
+	}
+
+	return repository.CreateMarketInput{
+		Name:            name,
+		Initials:        initials,
+		Latitude:        lat,
+		Longitude:       lng,
+		HasLocation:     hasLocation,
+		PrimaryColor:    primary,
+		BackgroundColor: background,
+		Source:          source,
+		Link:            strings.TrimSpace(body.Link),
+		CEP:             strings.TrimSpace(body.CEP),
+		Street:          strings.TrimSpace(body.Street),
+		Number:          strings.TrimSpace(body.Number),
+		Neighborhood:    strings.TrimSpace(body.Neighborhood),
+		City:            strings.TrimSpace(body.City),
+		State:           strings.TrimSpace(body.State),
+		Complement:      strings.TrimSpace(body.Complement),
 	}
 }
 
