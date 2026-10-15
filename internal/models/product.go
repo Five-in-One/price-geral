@@ -41,6 +41,25 @@ type Product struct {
 	// CatalogID is the canonical catalog item this listing is an offer of
 	// (see migration 0009); empty until the listing has been matched.
 	CatalogID string `json:"catalog_id,omitempty"`
+
+	// MarketsCount is how many markets sell this catalog item. Only the
+	// grouped search (GET /api/products/search) fills it.
+	MarketsCount int `json:"markets_count,omitempty"`
+}
+
+// ProductPage is one page of the grouped product search.
+type ProductPage struct {
+	Items   []Product `json:"items"`
+	Total   int       `json:"total"`
+	Limit   int       `json:"limit"`
+	Offset  int       `json:"offset"`
+	HasMore bool      `json:"has_more"`
+}
+
+// CategoryCount is a product category and how many search rows it has.
+type CategoryCount struct {
+	Category string `json:"category"`
+	Count    int    `json:"count"`
 }
 
 // ComputeUnitPrice fills UnitPrice/UnitPriceUnit from DefaultPrice and the

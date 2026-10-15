@@ -22,6 +22,8 @@ func productsRouter(pool *pgxpool.Pool) chi.Router {
 
 	r := chi.NewRouter()
 	r.Get("/", listProductsHandler(productsRepo))
+	r.Get("/search", searchProductsHandler(productsRepo, marketsRepo))
+	r.Get("/categories", productCategoriesHandler(productsRepo, marketsRepo))
 	r.Post("/", createProductHandler(productsRepo, marketsRepo, catalogRepo))
 	r.Patch("/{id}", updateProductHandler(productsRepo, catalogRepo))
 	r.Delete("/{id}", deleteProductHandler(productsRepo))
