@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import '../models/account.dart';
 import '../models/list_comparison.dart';
 import '../models/models.dart';
+import '../models/product_search.dart';
 import 'api_client.dart' show ApiException;
 import 'api_service.dart';
 import 'auth_storage.dart';
 import 'cart_storage.dart';
-import 'listing_grouping.dart';
 import 'location_service.dart';
 import 'settings_storage.dart';
 
@@ -49,7 +49,8 @@ class AppState extends ChangeNotifier {
   DateTime? _locationUpdatedAt;
   final List<CartItem> _cartItems = [];
   String _selectedCategory = 'Tudo';
-  String _selectedFilter = 'Menor preço';
+  ProductSort _sort = ProductSort.priceAsc;
+  SearchFilters _searchFilters = const SearchFilters();
   String _searchQuery = '';
   int _currentTabIndex = 0;
 
@@ -59,11 +60,21 @@ class AppState extends ChangeNotifier {
   bool _isLoadingMarkets = false;
   String? _marketsError;
 
-  // Search results (GET /api/products, filtered/sorted)
+  // Search results (GET /api/products/search): the pages loaded so far.
+  // Filtering, sorting and paging happen on the server.
   List<Product> _searchResults = [];
+  int _searchTotal = 0;
+  bool _searchHasMore = false;
   bool _isLoadingProducts = false;
+  bool _isLoadingMoreProducts = false;
   String? _productsError;
+  String? _loadMoreError;
   Timer? _searchDebounce;
+  // A new search makes every request still in flight stale.
+  int _searchTicket = 0;
+  // Categories with their counts under the current search and filters.
+  List<CategoryCount> _categories = [];
+  int _categoriesTicket = 0;
 
   // Shopping-list comparison (POST /api/comparisons/list)
   ListComparison? _comparison;
@@ -96,7 +107,8 @@ class AppState extends ChangeNotifier {
   DateTime? get locationUpdatedAt => _locationUpdatedAt;
   List<CartItem> get cartItems => List.unmodifiable(_cartItems);
   String get selectedCategory => _selectedCategory;
-  String get selectedFilter => _selectedFilter;
+  ProductSort get sort => _sort;
+  SearchFilters get searchFilters => _searchFilters;
   String get searchQuery => _searchQuery;
   int get currentTabIndex => _currentTabIndex;
 
@@ -106,8 +118,18 @@ class AppState extends ChangeNotifier {
   String? get marketsError => _marketsError;
 
   List<Product> get searchResults => _searchResults;
+  int get searchTotal => _searchTotal;
+
+  /// Pages of the search loaded so far, and how many there are in all
+  /// (pages of [ApiService.searchPageSize]).
+  int get searchPagesLoaded => (_searchResults.length / ApiService.searchPageSize).ceil();
+  int get searchPageCount => (_searchTotal / ApiService.searchPageSize).ceil();
+  bool get searchHasMore => _searchHasMore;
   bool get isLoadingProducts => _isLoadingProducts;
+  bool get isLoadingMoreProducts => _isLoadingMoreProducts;
   String? get productsError => _productsError;
+  String? get loadMoreError => _loadMoreError;
+  List<CategoryCount> get categories => _categories;
 
   ListComparison? get comparison => _comparison;
   bool get allowEquivalents => _allowEquivalents;
@@ -153,13 +175,21 @@ class AppState extends ChangeNotifier {
   }
 
   void setSelectedCategory(String category) {
+    if (_selectedCategory == category) return;
     _selectedCategory = category;
     notifyListeners();
-    refreshSearchResults();
+    refreshSearchResults(withCategories: false);
   }
 
-  void setSelectedFilter(String filter) {
-    _selectedFilter = filter;
+  void setSort(ProductSort sort) {
+    if (_sort == sort) return;
+    _sort = sort;
+    notifyListeners();
+    refreshSearchResults(withCategories: false);
+  }
+
+  void setSearchFilters(SearchFilters filters) {
+    _searchFilters = filters;
     notifyListeners();
     refreshSearchResults();
   }
@@ -227,7 +257,7 @@ class AppState extends ChangeNotifier {
     _radiusKm = radius;
     notifyListeners();
     unawaited(_settings.saveRadiusKm(radius));
-    await Future.wait([loadMarkets(), refreshComparison()]);
+    await Future.wait([loadMarkets(), refreshComparison(), if (_searchFilters.nearbyOnly) refreshSearchResults()]);
   }
 
   void _persistCart() {
@@ -276,7 +306,12 @@ class AppState extends ChangeNotifier {
       await detectLocation();
       _currentAddress = 'Minha localização';
       notifyListeners();
-      await Future.wait([loadMarkets(), refreshComparison(), if (lookupAddress) _lookUpAddress()]);
+      await Future.wait([
+        loadMarkets(),
+        refreshComparison(),
+        if (_searchFilters.nearbyOnly) refreshSearchResults(),
+        if (lookupAddress) _lookUpAddress(),
+      ]);
     } finally {
       _isUpdatingLocation = false;
       notifyListeners();
@@ -334,24 +369,93 @@ class AppState extends ChangeNotifier {
 
   // --- Products / Search -----------------------------------------------
 
-  Future<void> refreshSearchResults() async {
+  /// Starts the search over from the first page with the current text,
+  /// category, sort and filters. With [withCategories] it also reloads the
+  /// category counts (they depend on the text and filters, not on the
+  /// category or the order).
+  Future<void> refreshSearchResults({bool withCategories = true}) async {
+    _searchDebounce?.cancel();
+    final ticket = ++_searchTicket;
     _isLoadingProducts = true;
+    _isLoadingMoreProducts = false;
     _productsError = null;
+    _loadMoreError = null;
+    notifyListeners();
+
+    if (withCategories) unawaited(_loadCategories(++_categoriesTicket));
+    try {
+      final page = await _searchPage(offset: 0);
+      if (ticket != _searchTicket) return;
+      _searchResults = page.items;
+      _searchTotal = page.total;
+      _searchHasMore = page.hasMore;
+    } catch (e) {
+      if (ticket != _searchTicket) return;
+      _productsError = e.toString();
+      _searchResults = [];
+      _searchTotal = 0;
+      _searchHasMore = false;
+    } finally {
+      if (ticket == _searchTicket) {
+        _isLoadingProducts = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Appends the next page; called as the list nears its end. Does nothing
+  /// while another page is loading or when there is no more.
+  Future<void> loadMoreSearchResults() async {
+    if (!_searchHasMore || _isLoadingProducts || _isLoadingMoreProducts) return;
+    final ticket = _searchTicket;
+    _isLoadingMoreProducts = true;
+    _loadMoreError = null;
     notifyListeners();
     try {
-      // One row per product, not per market listing.
-      _searchResults = groupByCatalog(
-        await _api.fetchProducts(
-          category: _selectedCategory,
-          search: _searchQuery,
-          sortByPriceAsc: _selectedFilter == 'Menor preço',
-        ),
-      );
+      final page = await _searchPage(offset: _searchResults.length);
+      if (ticket != _searchTicket) return;
+      final known = {for (final p in _searchResults) p.id};
+      _searchResults = [..._searchResults, ...page.items.where((p) => known.add(p.id))];
+      _searchTotal = page.total;
+      _searchHasMore = page.hasMore && page.items.isNotEmpty;
     } catch (e) {
-      _productsError = e.toString();
+      if (ticket != _searchTicket) return;
+      _loadMoreError = e.toString();
     } finally {
-      _isLoadingProducts = false;
+      if (ticket == _searchTicket) {
+        _isLoadingMoreProducts = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<ProductPage> _searchPage({required int offset}) {
+    return _api.searchProducts(
+      search: _searchQuery,
+      category: _selectedCategory,
+      sort: _sort,
+      filters: _searchFilters,
+      lat: _userLocation?.lat,
+      lng: _userLocation?.lng,
+      radiusKm: _radiusKm,
+      offset: offset,
+    );
+  }
+
+  Future<void> _loadCategories(int ticket) async {
+    try {
+      final categories = await _api.fetchCategories(
+        search: _searchQuery,
+        filters: _searchFilters,
+        lat: _userLocation?.lat,
+        lng: _userLocation?.lng,
+        radiusKm: _radiusKm,
+      );
+      if (ticket != _categoriesTicket) return;
+      _categories = categories;
       notifyListeners();
+    } catch (_) {
+      // The chips keep the previous counts; the search itself reports errors.
     }
   }
 

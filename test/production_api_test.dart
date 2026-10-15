@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:price/core/services/api_client.dart';
+import 'package:price/core/models/product_search.dart';
 import 'package:price/core/services/api_service.dart';
 
 Map<String, dynamic> _product(int i) => {
@@ -76,58 +77,89 @@ void main() {
     );
   });
 
-  test('products are fetched page by page until a short page', () async {
-    final offsets = <String?>[];
+  test('the search sends text, category, sort, filters and the page to the server', () async {
+    late Uri asked;
     final service = _service(
       MockClient((request) async {
-        final offset = int.parse(request.url.queryParameters['offset']!);
-        offsets.add(request.url.queryParameters['offset']);
-        expect(request.url.queryParameters['limit'], '200');
-        final count = offset == 400 ? 70 : 200; // 470 products in all
+        asked = request.url;
         return http.Response(
-          jsonEncode([for (var i = 0; i < count; i++) _product(offset + i)]),
+          jsonEncode({
+            'items': [
+              {..._product(1), 'markets_count': 3},
+            ],
+            'total': 41,
+            'limit': 20,
+            'offset': 20,
+            'has_more': true,
+          }),
           200,
           headers: {'content-type': 'application/json; charset=utf-8'},
         );
       }),
     );
-    final products = await service.fetchProducts();
-    expect(products, hasLength(470));
-    expect(offsets, ['0', '200', '400']);
+
+    final page = await service.searchProducts(
+      search: ' arroz 5kg ',
+      category: 'GRÃOS',
+      sort: ProductSort.unitPriceAsc,
+      filters: const SearchFilters(marketIds: {'b', 'a'}, minPrice: 2, maxPrice: 30.5, nearbyOnly: true),
+      lat: -5.07,
+      lng: -42.8,
+      radiusKm: 5,
+      offset: 20,
+    );
+
+    expect(asked.path, '/api/products/search');
+    expect(asked.queryParameters, {
+      'search': 'arroz 5kg',
+      'category': 'GRÃOS',
+      'market_id': 'a,b',
+      'min_price': '2.00',
+      'max_price': '30.50',
+      'lat': '-5.07',
+      'lng': '-42.8',
+      'radius_km': '5.0',
+      'sort': 'unit_price_asc',
+      'limit': '20',
+      'offset': '20',
+    });
+    expect(page.total, 41);
+    expect(page.hasMore, isTrue);
+    expect(page.items.single.marketsCount, 3);
   });
 
-  test('a server that ignores limit/offset (local price-back) is asked only once', () async {
-    var calls = 0;
+  test('"Tudo" and the radius without "nearby only" are not sent', () async {
+    late Uri asked;
     final service = _service(
-      MockClient((_) async {
-        calls++;
-        return http.Response(
-          jsonEncode([for (var i = 0; i < 788; i++) _product(i)]),
-          200,
-          headers: {'content-type': 'application/json; charset=utf-8'},
-        );
+      MockClient((request) async {
+        asked = request.url;
+        return http.Response(jsonEncode({'items': [], 'total': 0, 'has_more': false}), 200);
       }),
     );
-    final products = await service.fetchProducts();
-    expect(products, hasLength(788));
-    expect(calls, 1);
+
+    await service.searchProducts(category: 'Tudo', lat: -5.07, lng: -42.8, radiusKm: 5);
+
+    expect(asked.queryParameters, {'sort': 'price_asc', 'limit': '20', 'offset': '0'});
   });
 
-  test('a repeated full page ends the paging without duplicates', () async {
-    var calls = 0;
+  test('categories come with their counts', () async {
     final service = _service(
-      MockClient((_) async {
-        calls++;
+      MockClient((request) async {
+        expect(request.url.path, '/api/products/categories');
         return http.Response(
-          jsonEncode([for (var i = 0; i < 200; i++) _product(i)]),
+          jsonEncode([
+            {'category': 'LATICÍNIOS', 'count': 93},
+          ]),
           200,
           headers: {'content-type': 'application/json; charset=utf-8'},
         );
       }),
     );
-    final products = await service.fetchProducts();
-    expect(products, hasLength(200));
-    expect(calls, 2);
+
+    final categories = await service.fetchCategories();
+
+    expect(categories.single.label, 'Laticínios');
+    expect(categories.single.count, 93);
   });
 
   test('savings history and economy summary send the token', () async {

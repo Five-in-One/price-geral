@@ -115,8 +115,8 @@ class Product {
   final double? unitPrice; // price per kg / L / m / un
   final String unitPriceUnit;
 
-  /// How many markets sell this product; the search groups the listings of one
-  /// catalog item into a single row.
+  /// How many markets sell this product; the server's search groups the
+  /// listings of one catalog item into a single row.
   final int marketsCount;
 
   const Product({
@@ -148,6 +148,7 @@ class Product {
       sizeLabel: (json['size_label'] as String?) ?? '',
       unitPrice: (json['unit_price'] as num?)?.toDouble(),
       unitPriceUnit: (json['unit_price_unit'] as String?) ?? '',
+      marketsCount: (json['markets_count'] as num?)?.toInt() ?? 1,
     );
   }
 

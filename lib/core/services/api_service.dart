@@ -1,6 +1,7 @@
 import '../models/account.dart';
 import '../models/list_comparison.dart';
 import '../models/models.dart';
+import '../models/product_search.dart';
 import 'api_client.dart';
 
 /// Ports each local backend service listens on (see each service's README).
@@ -30,12 +31,8 @@ class ApiService {
     return _production ??= ApiClient(baseUrl: ApiClient.productionUrl);
   }
 
-  /// Products per request; production caps `limit` at 200 and answers only
-  /// 50 without it.
-  static const _productsPageSize = 200;
-
-  /// Stops paging after this many pages, whatever the server answers.
-  static const _maxProductPages = 50;
+  /// Rows per page of the product search; the server allows up to 100.
+  static const searchPageSize = 20;
 
   // --- price-back: markets, products, comparisons ---------------------
 
@@ -49,28 +46,70 @@ class ApiService {
     return (data as List<dynamic>).map((e) => Market.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<List<Product>> fetchProducts({String? category, String? search, bool sortByPriceAsc = false}) async {
-    final query = <String, String>{
-      if (category != null && category.isNotEmpty) 'category': category,
-      if (search != null && search.isNotEmpty) 'search': search,
-      if (sortByPriceAsc) 'sort': 'price_asc',
-      'limit': '$_productsPageSize',
+  /// One page of the product search (GET /api/products/search). Filtering,
+  /// grouping (one row per product, its cheapest offer), sorting and paging
+  /// all happen in the database; [lat]/[lng]/[radiusKm] are sent only when
+  /// [SearchFilters.nearbyOnly] is on.
+  Future<ProductPage> searchProducts({
+    String search = '',
+    String? category,
+    ProductSort sort = ProductSort.priceAsc,
+    SearchFilters filters = const SearchFilters(),
+    double? lat,
+    double? lng,
+    double? radiusKm,
+    int offset = 0,
+    int limit = searchPageSize,
+  }) async {
+    final data = await _productsClient.get(
+      '/api/products/search',
+      query: {
+        ..._searchQuery(search, category, filters, lat, lng, radiusKm),
+        'sort': sort.apiValue,
+        'limit': '$limit',
+        'offset': '$offset',
+      },
+    );
+    return ProductPage.fromJson(data);
+  }
+
+  /// Categories with how many products each holds under the same search and
+  /// filters (GET /api/products/categories), largest first.
+  Future<List<CategoryCount>> fetchCategories({
+    String search = '',
+    SearchFilters filters = const SearchFilters(),
+    double? lat,
+    double? lng,
+    double? radiusKm,
+  }) async {
+    final data = await _productsClient.get(
+      '/api/products/categories',
+      query: _searchQuery(search, null, filters, lat, lng, radiusKm),
+    );
+    return (data as List<dynamic>).map((e) => CategoryCount.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Map<String, String> _searchQuery(
+    String search,
+    String? category,
+    SearchFilters filters,
+    double? lat,
+    double? lng,
+    double? radiusKm,
+  ) {
+    String price(double v) => v.toStringAsFixed(2);
+    return {
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+      if (category != null && category.isNotEmpty && category != 'Tudo') 'category': category,
+      if (filters.marketIds.isNotEmpty) 'market_id': (filters.marketIds.toList()..sort()).join(','),
+      if (filters.minPrice != null) 'min_price': price(filters.minPrice!),
+      if (filters.maxPrice != null) 'max_price': price(filters.maxPrice!),
+      if (filters.nearbyOnly && lat != null && lng != null && radiusKm != null) ...{
+        'lat': '$lat',
+        'lng': '$lng',
+        'radius_km': '$radiusKm',
+      },
     };
-    // Production pages the results; the local price-back ignores limit/offset
-    // and answers everything at once, which ends the loop after one request.
-    final products = <Product>[];
-    final seen = <String>{};
-    for (var page = 0; page < _maxProductPages; page++) {
-      final data = await _productsClient.get(
-        '/api/products',
-        query: {...query, 'offset': '${page * _productsPageSize}'},
-      );
-      final batch = (data as List<dynamic>).map((e) => Product.fromJson(e as Map<String, dynamic>)).toList();
-      final fresh = batch.where((p) => seen.add(p.id)).toList();
-      products.addAll(fresh);
-      if (batch.length != _productsPageSize || fresh.isEmpty) break;
-    }
-    return products;
   }
 
   /// Prices the shopping list at every market (POST /api/comparisons/list).

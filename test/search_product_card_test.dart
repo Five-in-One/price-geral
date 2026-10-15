@@ -16,7 +16,7 @@ const _longMarket = 'Carvalho Super - Homero Castelo Branco';
 
 http.Client _fakeBackend() {
   return MockClient((request) async {
-    if (request.url.path == '/api/products') {
+    if (request.url.path == '/api/products/search') {
       return http.Response(
         jsonEncode([
           {

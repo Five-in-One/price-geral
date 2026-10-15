@@ -9,8 +9,32 @@ import '../comparison/comparison_page.dart';
 // import '../economy/economy_page.dart';
 import '../user/user_page.dart';
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  // The search list's scroll, so tapping "Busca" again takes it to the top.
+  final _searchScroll = ScrollController();
+
+  static const _searchTab = 0;
+
+  @override
+  void dispose() {
+    _searchScroll.dispose();
+    super.dispose();
+  }
+
+  void _selectTab(AppState appState, int index) {
+    if (index == _searchTab && appState.currentTabIndex == _searchTab) {
+      SearchPage.scrollToTop(_searchScroll);
+      return;
+    }
+    appState.setTabIndex(index);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +43,7 @@ class DashboardPage extends StatelessWidget {
 
     // Pages mapping the tabs
     final List<Widget> pages = [
-      const SearchPage(),
+      SearchPage(scrollController: _searchScroll),
       const CartPage(),
       const ComparisonPage(),
       // const EconomyPage(),
@@ -53,7 +77,7 @@ class DashboardPage extends StatelessWidget {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           child: NavigationBar(
             selectedIndex: activeIndex,
-            onDestinationSelected: (index) => appState.setTabIndex(index),
+            onDestinationSelected: (index) => _selectTab(appState, index),
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             destinations: [
               const NavigationDestination(
