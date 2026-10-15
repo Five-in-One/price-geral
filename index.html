@@ -1005,7 +1005,6 @@
 <script>
   const PRICE_BACK_URL = "http://localhost:8080";
   const PRICE_AUTH_URL = "http://localhost:8081";
-  const COLLECT_API_URL = "http://localhost:8085";
   const SESSION_KEY = "price_admin_session";
   const THEME_KEY = "price_admin_theme";
 
@@ -1449,39 +1448,76 @@
 
     const buttons = document.querySelectorAll(`button.reload`);
     buttons.forEach(b => b.disabled = true);
+    statusEl.className = "";
+    statusEl.textContent = `Enviando ${links.length} link(s) de "${market.name}" para a fila de coleta...`;
 
-    let totalInserted = 0;
-    let failures = 0;
-
-    for (let i = 0; i < links.length; i++) {
-      statusEl.className = "";
-      statusEl.textContent = `Recarregando "${market.name}" (${i + 1}/${links.length}): ${links[i]}...`;
-      try {
-        const res = await fetch(COLLECT_API_URL + "/collect", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: links[i], market_name: market.name }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          failures++;
-          continue;
-        }
-        totalInserted += data.products_inserted;
-      } catch (e) {
-        failures++;
+    try {
+      // price-back cria um job por link, publica um evento por job no
+      // RabbitMQ e responde 202 na hora; os workers do bot dividem os jobs.
+      const res = await fetch(`${PRICE_BACK_URL}/api/markets/${id}/collect`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.className = "error";
+        statusEl.textContent = "Erro: " + collectErrorMessage(data.error || res.statusText);
+        return;
       }
-    }
 
-    buttons.forEach(b => b.disabled = false);
-    statusEl.className = failures > 0 ? "error" : "ok";
-    statusEl.textContent =
-      `"${market.name}": ${links.length - failures}/${links.length} links recarregados com sucesso, ` +
-      `${totalInserted} produtos atualizados.` +
-      (failures > 0 ? ` ${failures} link(s) falharam.` : "");
+      const jobs = await waitForJobs(data.jobs.map(j => j.id), (done, total) => {
+        statusEl.className = "";
+        statusEl.textContent = `Recarregando "${market.name}": ${done}/${total} links concluídos...`;
+      });
+      const failures = jobs.filter(j => j.status !== "succeeded").length;
+      const totalInserted = jobs.reduce((sum, j) => sum + (j.products_inserted || 0), 0);
+      statusEl.className = failures > 0 ? "error" : "ok";
+      statusEl.textContent =
+        `"${market.name}": ${jobs.length - failures}/${jobs.length} links recarregados com sucesso, ` +
+        `${totalInserted} produtos atualizados.` +
+        (failures > 0 ? ` ${failures} link(s) falharam.` : "");
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = e.message || "Não foi possível falar com o price-back.";
+    } finally {
+      buttons.forEach(b => b.disabled = false);
+    }
 
     loadMarkets();
     loadProducts();
+  }
+
+  // --- Jobs de coleta (assíncronos, via RabbitMQ) -----------------------------
+
+  const JOB_POLL_MS = 2000;
+  const JOB_TIMEOUT_MS = 10 * 60 * 1000;
+
+  // Consulta GET /api/collect/jobs/{id} a cada 2s até todos os jobs
+  // terminarem (succeeded/failed). Devolve o estado final de cada job.
+  async function waitForJobs(ids, onProgress) {
+    const started = Date.now();
+    const finished = new Map();
+    while (finished.size < ids.length) {
+      if (Date.now() - started > JOB_TIMEOUT_MS) {
+        throw new Error("A coleta continua na fila. Confira de novo daqui a pouco (algum worker do bot está rodando?).");
+      }
+      await new Promise(r => setTimeout(r, JOB_POLL_MS));
+      for (const id of ids) {
+        if (finished.has(id)) continue;
+        const res = await fetch(`${PRICE_BACK_URL}/api/collect/jobs/${id}`);
+        if (!res.ok) continue;
+        const job = await res.json();
+        if (job.status === "succeeded" || job.status === "failed") finished.set(id, job);
+      }
+      onProgress(finished.size, ids.length);
+    }
+    return ids.map(id => finished.get(id));
+  }
+
+  function collectErrorMessage(code) {
+    return ({
+      broker_unavailable: "a fila de mensagens (RabbitMQ) está fora do ar.",
+      url_unreachable: "não foi possível acessar o site.",
+      internal_error: "erro inesperado no bot durante a coleta.",
+      collect_in_progress: "já existe uma coleta em andamento para esse link.",
+    })[code] || code;
   }
 
   // --- Produtos ---------------------------------------------------------------
@@ -2120,10 +2156,13 @@
     }
 
     btn.disabled = true;
-    statusEl.textContent = "Acessando o site e interpretando os produtos com IA... isso pode levar até 1 minuto.";
+    statusEl.textContent = "Enviando o pedido de coleta...";
 
     try {
-      const res = await fetch(COLLECT_API_URL + "/collect", {
+      // price-back salva o mercado e o job, publica collect.requested no
+      // RabbitMQ e responde 202 na hora. Um worker do bot faz a coleta em
+      // segundo plano; aqui só acompanhamos o job.
+      const res = await fetch(PRICE_BACK_URL + "/api/admin/collect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2132,25 +2171,37 @@
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
+      // 409: já tem uma coleta desse link na fila — acompanha a existente.
+      if (!res.ok && res.status !== 409) {
         statusEl.className = "error";
-        statusEl.textContent = "Erro: " + (data.detail || res.statusText);
-        // O mercado (com o endereço) é registrado antes da coleta rodar, então
-        // mesmo se a coleta falhar (site fora do ar, seletor desatualizado
-        // etc.) ele já existe — atualiza a tabela para refletir isso.
+        statusEl.textContent = "Erro: " + collectErrorMessage(data.error || res.statusText);
         loadMarkets();
+        return;
+      }
+      // O mercado (com o endereço) já foi gravado antes da coleta.
+      loadMarkets();
+
+      statusEl.textContent = res.status === 409
+        ? "Já existe uma coleta desse link na fila — acompanhando..."
+        : "Pedido aceito (202). Na fila — o bot está acessando o site e interpretando os produtos com IA...";
+      const [job] = await waitForJobs([data.job.id], () => {});
+      if (job.status !== "succeeded") {
+        statusEl.className = "error";
+        statusEl.textContent = "Erro: " + collectErrorMessage(job.error || "falha na coleta");
         return;
       }
       statusEl.className = "ok";
       statusEl.textContent =
-        `Encontrados ${data.blocks_found} blocos, ${data.products_extracted} produtos reconhecidos pela IA, ` +
-        `${data.products_inserted} adicionados à tabela.`;
+        `Encontrados ${job.blocks_found} blocos, ${job.products_extracted} produtos reconhecidos pela IA, ` +
+        `${job.products_inserted} adicionados à tabela.`;
       loadProducts();
       loadMarkets();
       loadSuggestions();
     } catch (e) {
       statusEl.className = "error";
-      statusEl.textContent = "Não foi possível falar com o serviço de coleta (price-bot está rodando na porta 8085?).";
+      statusEl.textContent = e.message && !(e instanceof TypeError)
+        ? e.message
+        : "Não foi possível falar com o price-back (está rodando na porta 8080?).";
     } finally {
       btn.disabled = false;
     }
