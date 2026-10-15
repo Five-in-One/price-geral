@@ -50,7 +50,9 @@ Future<void> _pumpSearch(WidgetTester tester, Size size) async {
   addTearDown(tester.view.reset);
 
   final client = ApiClient(baseUrl: 'http://test', client: _fakeBackend());
-  final appState = AppState(api: ApiService(productsClient: client, userClient: client));
+  final appState = AppState(
+    api: ApiService(productsClient: client, userClient: client),
+  );
 
   await tester.pumpWidget(
     ChangeNotifierProvider.value(

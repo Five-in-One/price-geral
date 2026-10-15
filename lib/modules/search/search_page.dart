@@ -29,9 +29,7 @@ class _SearchPageState extends State<SearchPage> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await appState.updateLocation();
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Localização atualizada.'), duration: Duration(seconds: 2)),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Localização atualizada.'), duration: Duration(seconds: 2)));
     } on LocationException catch (e) {
       showLocationError(messenger, appState, e);
     }
@@ -96,11 +94,7 @@ class _SearchPageState extends State<SearchPage> {
                   children: [
                     Text(
                       product.name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.ink,
-                      ),
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink),
                     ),
                     const SizedBox(height: 6),
                     // Price first, market beside it when it fits or on the next line
@@ -115,11 +109,7 @@ class _SearchPageState extends State<SearchPage> {
                           children: [
                             Text(
                               'R\$ ${product.defaultPrice.toStringAsFixed(2).replaceAll('.', ',')} ',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.brand,
-                              ),
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.brand),
                             ),
                             Text(
                               _sizeText(product),
@@ -145,10 +135,7 @@ class _SearchPageState extends State<SearchPage> {
                                 product.marketsCount > 1
                                     ? '@ ${product.defaultMarketName} · em ${product.marketsCount} mercados'
                                     : '@ ${product.defaultMarketName}',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.grayLight,
-                                ),
+                                style: const TextStyle(fontSize: 11, color: AppColors.grayLight),
                               ),
                             ),
                           ],
@@ -351,7 +338,8 @@ class _SearchPageState extends State<SearchPage> {
                       itemBuilder: (context, index) {
                         final filter = filters[index];
                         final isMenorPreco = filter == 'Menor preço';
-                        final isSelected = selectedFilter == filter || (isMenorPreco && selectedFilter == 'Menor preço');
+                        final isSelected =
+                            selectedFilter == filter || (isMenorPreco && selectedFilter == 'Menor preço');
                         final active = isSelected && isMenorPreco;
 
                         return Padding(

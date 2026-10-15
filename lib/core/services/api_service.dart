@@ -19,9 +19,9 @@ class ApiService {
   final ApiClient _userClient;
 
   ApiService({ApiClient? productsClient, ApiClient? authClient, ApiClient? userClient})
-      : _productsClient = productsClient ?? _defaultClient(ApiPorts.products),
-        _authClient = authClient ?? _defaultClient(ApiPorts.auth),
-        _userClient = userClient ?? _defaultClient(ApiPorts.user);
+    : _productsClient = productsClient ?? _defaultClient(ApiPorts.products),
+      _authClient = authClient ?? _defaultClient(ApiPorts.auth),
+      _userClient = userClient ?? _defaultClient(ApiPorts.user);
 
   static ApiClient? _production;
 
@@ -46,16 +46,10 @@ class ApiService {
       if (radiusKm != null) 'radius_km': radiusKm.toString(),
     };
     final data = await _productsClient.get('/api/markets', query: query);
-    return (data as List<dynamic>)
-        .map((e) => Market.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return (data as List<dynamic>).map((e) => Market.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<List<Product>> fetchProducts({
-    String? category,
-    String? search,
-    bool sortByPriceAsc = false,
-  }) async {
+  Future<List<Product>> fetchProducts({String? category, String? search, bool sortByPriceAsc = false}) async {
     final query = <String, String>{
       if (category != null && category.isNotEmpty) 'category': category,
       if (search != null && search.isNotEmpty) 'search': search,
@@ -94,19 +88,12 @@ class ApiService {
       'items': [
         for (final item in items)
           {
-            if (item.product.catalogId != null)
-              'catalog_id': item.product.catalogId
-            else
-              'product_id': item.product.id,
+            if (item.product.catalogId != null) 'catalog_id': item.product.catalogId else 'product_id': item.product.id,
             'quantity': item.quantity,
           },
       ],
       'allow_equivalents': allowEquivalents,
-      if (lat != null && lng != null) ...{
-        'lat': lat,
-        'lng': lng,
-        if (radiusKm != null) 'radius_km': radiusKm,
-      },
+      if (lat != null && lng != null) ...{'lat': lat, 'lng': lng, if (radiusKm != null) 'radius_km': radiusKm},
     };
     try {
       final data = await _productsClient.post('/api/comparisons/list', body: body);
@@ -230,9 +217,7 @@ class ApiService {
 
   Future<List<SavingsHistoryItem>> fetchSavingsHistory(String token) async {
     final data = await _userClient.get('/api/savings-history', token: token);
-    return (data as List<dynamic>)
-        .map((e) => SavingsHistoryItem.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return (data as List<dynamic>).map((e) => SavingsHistoryItem.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<EconomySummary> fetchEconomySummary(String token) async {

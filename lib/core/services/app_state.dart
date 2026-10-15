@@ -25,11 +25,11 @@ class AppState extends ChangeNotifier {
     CartStorage? storage,
     AuthStorage? authStorage,
     SettingsStorage? settings,
-  })  : _api = api ?? ApiService(),
-        _location = location ?? const LocationService(),
-        _storage = storage ?? const SharedPreferencesCartStorage(),
-        _authStorage = authStorage ?? const SharedPreferencesAuthStorage(),
-        _settings = settings ?? const SharedPreferencesSettingsStorage();
+  }) : _api = api ?? ApiService(),
+       _location = location ?? const LocationService(),
+       _storage = storage ?? const SharedPreferencesCartStorage(),
+       _authStorage = authStorage ?? const SharedPreferencesAuthStorage(),
+       _settings = settings ?? const SharedPreferencesSettingsStorage();
 
   /// Markets search radius the person can pick, in km. The default matches
   /// the API's own default radius.
@@ -276,11 +276,7 @@ class AppState extends ChangeNotifier {
       await detectLocation();
       _currentAddress = 'Minha localização';
       notifyListeners();
-      await Future.wait([
-        loadMarkets(),
-        refreshComparison(),
-        if (lookupAddress) _lookUpAddress(),
-      ]);
+      await Future.wait([loadMarkets(), refreshComparison(), if (lookupAddress) _lookUpAddress()]);
     } finally {
       _isUpdatingLocation = false;
       notifyListeners();
@@ -344,11 +340,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       // One row per product, not per market listing.
-      _searchResults = groupByCatalog(await _api.fetchProducts(
-        category: _selectedCategory,
-        search: _searchQuery,
-        sortByPriceAsc: _selectedFilter == 'Menor preço',
-      ));
+      _searchResults = groupByCatalog(
+        await _api.fetchProducts(
+          category: _selectedCategory,
+          search: _searchQuery,
+          sortByPriceAsc: _selectedFilter == 'Menor preço',
+        ),
+      );
     } catch (e) {
       _productsError = e.toString();
     } finally {

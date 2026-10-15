@@ -154,18 +154,18 @@ class Product {
   /// Same keys as the API, so [Product.fromJson] reads it back (the shopping
   /// list is saved on the device).
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'unit': unit,
-        'category': category,
-        'default_market_name': defaultMarketName,
-        'default_price': defaultPrice,
-        'catalog_id': catalogId,
-        'brand': brand,
-        'size_label': sizeLabel,
-        'unit_price': unitPrice,
-        'unit_price_unit': unitPriceUnit,
-      };
+    'id': id,
+    'name': name,
+    'unit': unit,
+    'category': category,
+    'default_market_name': defaultMarketName,
+    'default_price': defaultPrice,
+    'catalog_id': catalogId,
+    'brand': brand,
+    'size_label': sizeLabel,
+    'unit_price': unitPrice,
+    'unit_price_unit': unitPriceUnit,
+  };
 
   Product copyWith({double? defaultPrice, String? defaultMarketName, int? marketsCount}) {
     return Product(
@@ -189,19 +189,14 @@ class CartItem {
   final Product product;
   int quantity;
 
-  CartItem({
-    required this.product,
-    required this.quantity,
-  });
+  CartItem({required this.product, required this.quantity});
 
   double get totalPrice => product.defaultPrice * quantity;
 
   Map<String, dynamic> toJson() => {'product': product.toJson(), 'quantity': quantity};
 
-  factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
-        product: Product.fromJson(json['product'] as Map<String, dynamic>),
-        quantity: json['quantity'] as int,
-      );
+  factory CartItem.fromJson(Map<String, dynamic> json) =>
+      CartItem(product: Product.fromJson(json['product'] as Map<String, dynamic>), quantity: json['quantity'] as int);
 }
 
 class SavingsHistoryItem {

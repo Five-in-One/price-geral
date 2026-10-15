@@ -29,23 +29,24 @@ class DashboardPage extends StatelessWidget {
     final int totalCartItems = appState.totalItemsCount;
 
     Widget listIcon(IconData icon) => Badge(
-          isLabelVisible: totalCartItems > 0,
-          backgroundColor: AppColors.brand,
-          label: Text('$totalCartItems', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800)),
-          child: Icon(icon),
-        );
+      isLabelVisible: totalCartItems > 0,
+      backgroundColor: AppColors.brand,
+      label: Text('$totalCartItems', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800)),
+      child: Icon(icon),
+    );
 
     return Scaffold(
-      body: IndexedStack(
-        index: activeIndex,
-        children: pages,
-      ),
+      body: IndexedStack(index: activeIndex, children: pages),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           boxShadow: [
-            BoxShadow(color: const Color(0xFF1E3C78).withValues(alpha: 0.08), blurRadius: 24, offset: const Offset(0, -6)),
+            BoxShadow(
+              color: const Color(0xFF1E3C78).withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, -6),
+            ),
           ],
         ),
         child: ClipRRect(
