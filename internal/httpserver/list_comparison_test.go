@@ -323,3 +323,40 @@ func TestCompareList_Validation(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))
 	require.Equal(t, fixtureProduct, out["product_id"], "the response says which product couldn't be resolved")
 }
+
+func TestCompareList_Equivalents_SameStapleDespiteNoisyGenericKeys(t *testing.T) {
+	pool := testutil.NewTestPool(t)
+	router := httpserver.NewRouter(pool)
+
+	// The parser didn't know "Sinha" as a brand, so the generic keys differ;
+	// both are soy oil, 900 ml.
+	soya := listing(t, router, "af", "Óleo de Soja Soya 900ml", 7.49, map[string]any{
+		"brand": "Soya", "generic_key": "oleo soja", "size_kind": "volume", "size_amount": 900,
+	})
+	listing(t, router, "se", "Oleo Soja Sinha 900ml", 6.99, map[string]any{
+		"generic_key": "oleo sinha soja", "size_kind": "volume", "size_amount": 900,
+	})
+	// same bean, two brands; the parser took "Sempre Verde" for the brand
+	popy := listing(t, router, "af", "Feijao Sempre Verde Popy 1kg Tp2", 5.98, map[string]any{
+		"generic_key": "feijao popy tipo2", "size_kind": "mass", "size_amount": 1000,
+	})
+	listing(t, router, "se", "Feijao Sempre Verde Ideal Tipo-2 1kg", 6.49, map[string]any{
+		"brand": "Ideal", "generic_key": "feijao sempre tipo2 verde", "size_kind": "mass", "size_amount": 1000,
+	})
+	// a different bean must not stand in
+	listing(t, router, "se", "Feijão Preto T-2 Sofia 1kg", 4.00, map[string]any{
+		"brand": "Sofia", "generic_key": "feijao preto tipo2", "size_kind": "mass", "size_amount": 1000,
+	})
+
+	items := []any{item(soya.CatalogID, 1), item(popy.CatalogID, 1)}
+	strict := compareList(t, router, map[string]any{"items": items})
+	require.Zero(t, marketByID(t, strict, "se").FoundItems)
+
+	c := compareList(t, router, map[string]any{"items": items, "allow_equivalents": true})
+	se := marketByID(t, c, "se")
+	require.True(t, se.IsComplete)
+	require.Equal(t, 2, se.SubstitutesCount)
+	require.Equal(t, "Oleo Soja Sinha 900ml", lineFor(se, soya.CatalogID).ProductName)
+	require.Equal(t, "Feijao Sempre Verde Ideal Tipo-2 1kg", lineFor(se, popy.CatalogID).ProductName,
+		"the black bean is cheaper but is not the same product")
+}

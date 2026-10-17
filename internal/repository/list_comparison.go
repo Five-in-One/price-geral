@@ -82,7 +82,7 @@ func (r *ComparisonsRepo) CompareList(ctx context.Context, req models.ListCompar
 	candidates := map[string]bool{}
 	for _, w := range list {
 		candidates[w.item.ID] = true
-		if !req.AllowEquivalents || !IsSubstitutable(w.item.GenericKey) {
+		if !req.AllowEquivalents {
 			continue
 		}
 		ids, err := r.equivalentsOf(ctx, w.item)
@@ -247,14 +247,32 @@ func (r *ComparisonsRepo) loadCatalogRows(ctx context.Context, ids []string) (ma
 	return out, rows.Err()
 }
 
-// equivalentsOf returns the other catalog items that are the same product in
-// another brand: identical generic key, package size and pack count.
+// equivalentsOf returns the other catalog items that can stand in for c: the
+// same product in another brand, in about the same package.
+//
+// Two ways to be the same product, either is enough:
+//   - the same staple (see staples.go): type and qualifiers read from the
+//     name, so "Oleo Soja Sinha 900ml" stands in for "Óleo de Soja Soya
+//     900ml" although the parser left "sinha" in its generic key;
+//   - the same generic key, for the other whitelisted types
+//     (IsSubstitutable), as before.
+//
+// Neither ever applies to brand-sensitive products (beer, wine, chocolate…).
 func (r *ComparisonsRepo) equivalentsOf(ctx context.Context, c catalogRow) ([]string, error) {
+	_, isStaple := classifyStaple(c.Name)
+	sameKey := IsSubstitutable(c.GenericKey)
+	if !isStaple && !sameKey {
+		return nil, nil
+	}
+
+	// candidates: same kind of measure and pack, amount within 10%; the rest
+	// is decided in Go (a few hundred rows at most)
 	rows, err := r.pool.Query(ctx, `
-		SELECT id FROM catalog_items
-		WHERE id <> $1 AND generic_key = $2 AND size_kind = $3 AND size_amount = $4
-		  AND pack_count = $5 AND sold_by_weight = $6 AND brand <> $7
-	`, c.ID, c.GenericKey, c.SizeKind, c.SizeAmount, c.PackCount, c.SoldByWeight, c.Brand)
+		SELECT id, name, brand, generic_key, size_kind, size_amount::float8, size_label, pack_count, sold_by_weight
+		FROM catalog_items
+		WHERE id <> $1 AND size_kind = $2 AND pack_count = $3 AND sold_by_weight = $4
+		  AND size_amount BETWEEN $5 * 0.9 AND $5 / 0.9
+	`, c.ID, c.SizeKind, c.PackCount, c.SoldByWeight, c.SizeAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -262,11 +280,14 @@ func (r *ComparisonsRepo) equivalentsOf(ctx context.Context, c catalogRow) ([]st
 
 	var ids []string
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var o catalogRow
+		if err := rows.Scan(&o.ID, &o.Name, &o.Brand, &o.GenericKey, &o.SizeKind, &o.SizeAmount, &o.SizeLabel, &o.PackCount, &o.SoldByWeight); err != nil {
 			return nil, err
 		}
-		ids = append(ids, id)
+		byKey := sameKey && o.GenericKey == c.GenericKey && o.SizeAmount == c.SizeAmount && o.Brand != c.Brand
+		if byKey || (isStaple && isEquivalentStaple(c, o)) {
+			ids = append(ids, o.ID)
+		}
 	}
 	return ids, rows.Err()
 }
@@ -315,17 +336,26 @@ func (r *ComparisonsRepo) loadOffers(ctx context.Context, catalogIDs []string) (
 }
 
 // pickOffer chooses the market's listing for an item: the requested product
-// if it sells it, otherwise the cheapest equivalent.
+// if it sells it, otherwise the cheapest equivalent. Equivalents may differ a
+// little in size (900 ml × 1 L), so they are compared by price per kg/L when
+// both have one.
 func pickOffer(offers map[string]map[string]offer, marketID, itemID string, equivalents []string) (o offer, substitute, ok bool) {
 	if exact, found := offers[itemID][marketID]; found {
 		return exact, false, true
 	}
 	for _, id := range equivalents {
-		if eq, found := offers[id][marketID]; found && (!ok || eq.price < o.price) {
+		if eq, found := offers[id][marketID]; found && (!ok || cheaper(eq, o)) {
 			o, substitute, ok = eq, true, true
 		}
 	}
 	return o, substitute, ok
+}
+
+func cheaper(a, b offer) bool {
+	if a.unitPrice != nil && b.unitPrice != nil && a.unitPer == b.unitPer {
+		return *a.unitPrice < *b.unitPrice
+	}
+	return a.price < b.price
 }
 
 func lineFor(w wanted, o offer, substitute bool) models.ListLine {

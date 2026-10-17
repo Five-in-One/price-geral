@@ -379,20 +379,43 @@ os mercados (em empate, todas as empatadas).
 ### Outras marcas (`allow_equivalents`)
 
 Com a opção ligada, se um mercado não tem o produto pedido, ele pode completar
-com **outra marca do mesmo produto** — mesma chave genérica, mesmo tamanho e
-mesma quantidade na embalagem (Arroz Camil 5 kg → Arroz Sofia 5 kg; nunca 2 kg).
-A linha vem com `is_substitute: true` e a marca que foi usada. Regras:
+com **outra marca do mesmo produto**, em embalagem do mesmo tamanho (até 10% de
+diferença: 900 ml × 1 L; nunca 2 kg × 5 kg) e com a mesma quantidade de
+unidades. A linha vem com `is_substitute: true` e a marca que foi usada.
+
+**O que conta como "o mesmo produto"** (qualquer um dos dois basta):
+
+- **Mesmo básico** (`internal/repository/staples.go`). O nome é lido como **tipo
+  + qualificadores**, e o resto (marca, embalagem, "longa vida", "com tampa") é
+  ignorado:
+  - arroz: branco/parboilizado/integral, tipo 1/2/3;
+  - feijão: carioca/preto/fradinho/sempre verde…, tipo;
+  - açúcar, sal, óleo (soja, canola…);
+  - leite (integral/semi/desnatado, zero lactose), leite condensado, creme de
+    leite;
+  - farinha de trigo e de mandioca, flocão, fubá, macarrão (formato, com ovos);
+  - molho e extrato de tomate, vinagre, água mineral (com/sem gás), papel
+    higiênico (folha), detergente.
+
+  Exemplo: "Oleo Soja Sinha 900ml" substitui "Óleo de Soja Soya 900ml", mesmo
+  com o parser tendo deixado "sinha" na chave genérica. Tipo 1 pode substituir
+  tipo 2 (melhor ou igual), nunca o contrário.
+- **Mesma chave genérica e mesmo tamanho**, para as palavras da lista de
+  `internal/repository/equivalence.go` (a regra antiga, que continua valendo).
+
+Regras:
 
 1. **A marca pedida sempre vence.** Se o mercado a vende, é ela que entra, mesmo
-   havendo outra mais barata.
-2. **Só para produtos em que trocar de marca é normal.** A lista fica em
-   `internal/repository/equivalence.go` (arroz, feijão, açúcar, sal, farinha,
-   óleo, leite, macarrão, vinagre, água, papel higiênico, detergente). É uma lista
-   *permitida* de propósito: o pior caso de um esquecimento é perder uma economia,
-   e não trocar em silêncio a cerveja ou o vinho de alguém. Palavras como
-   `chocolate`, `doce` e `cerveja` **vetam** a lista (para "chocolate ao leite" não
-   virar "leite").
-3. Para permitir mais tipos de produto, basta acrescentar a palavra à lista.
+   havendo outra mais barata. Entre vários substitutos, entra o de menor preço
+   por kg/L.
+2. **Só para produtos em que trocar de marca é normal.** As duas listas são
+   *permitidas* de propósito: o pior caso de um esquecimento é perder uma
+   economia, e não trocar em silêncio a cerveja ou o vinho de alguém. Palavras
+   como `chocolate`, `doce` e `cerveja` **vetam** a troca (para "chocolate ao
+   leite" não virar "leite"), e cada tipo tem as suas exclusões ("leite de
+   coco", "sal para churrasco"). Café continua fora: a marca importa.
+3. Para permitir mais tipos, acrescente o tipo a `stapleTypes` (com as
+   exclusões e qualificadores) e um caso real em `staples_test.go`.
 
 ### Melhor combinação
 
