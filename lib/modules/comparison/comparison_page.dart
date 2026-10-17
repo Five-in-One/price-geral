@@ -123,10 +123,7 @@ class _ComparisonPageState extends State<ComparisonPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _EquivalentsToggle(
-                    value: appState.allowEquivalents,
-                    onChanged: appState.setAllowEquivalents,
-                  ),
+                  _EquivalentsToggle(value: appState.allowEquivalents, onChanged: appState.setAllowEquivalents),
                   const SizedBox(height: 14),
 
                   _SummaryCard(comparison: comparison),
@@ -206,7 +203,10 @@ class _EquivalentsToggle extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Aceitar outras marcas', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _ink)),
+                Text(
+                  'Aceitar outras marcas',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _ink),
+                ),
                 SizedBox(height: 2),
                 Text(
                   'Só para arroz, feijão, açúcar e similares. A marca da sua lista tem prioridade.',
@@ -277,7 +277,9 @@ class _SummaryCard extends StatelessWidget {
           colors: [AppColors.brandBright, AppColors.brand, AppColors.brandDark],
         ),
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10))],
+        boxShadow: [
+          BoxShadow(color: AppColors.brand.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10)),
+        ],
       ),
       child: Stack(
         children: [
@@ -305,100 +307,114 @@ class _SummaryCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.stars, color: Colors.white, size: 14),
-              const SizedBox(width: 4),
-              Text(
-                'MELHOR PREÇO',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white.withValues(alpha: 0.9),
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              MarketAvatar(
-                initials: best.market.initials,
-                primaryColor: best.market.primaryColor,
-                backgroundColor: Colors.white,
-                size: 40,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
+                    const Icon(Icons.stars, color: Colors.white, size: 14),
+                    const SizedBox(width: 4),
                     Text(
-                      best.market.name,
-                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                      'MELHOR PREÇO',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white.withValues(alpha: 0.9),
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${formatBrl(best.totalCost)} no total'
-                      '${best.distanceKm == null ? '' : ' · ${formatKm(best.distanceKm!)}'}',
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12),
-                    ),
-                    if (best.market.hasAddress) ...[
-                      const SizedBox(height: 4),
-                      MarketAddressLine(market: best.market, color: Colors.white, maxLines: 2),
-                    ],
-                    MarketAddressButton(market: best.market, distanceKm: best.distanceKm, color: Colors.white),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          if (comparison.maxSavings > 0)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        formatBrl(comparison.maxSavings),
-                        style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, height: 1.0, letterSpacing: -0.8),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    MarketAvatar(
+                      initials: best.market.initials,
+                      primaryColor: best.market.primaryColor,
+                      backgroundColor: Colors.white,
+                      size: 40,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            best.market.name,
+                            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${formatBrl(best.totalCost)} no total'
+                            '${best.distanceKm == null ? '' : ' · ${formatKm(best.distanceKm!)}'}',
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12),
+                          ),
+                          if (best.market.hasAddress) ...[
+                            const SizedBox(height: 4),
+                            MarketAddressLine(market: best.market, color: Colors.white, maxLines: 2),
+                          ],
+                          MarketAddressButton(market: best.market, distanceKm: best.distanceKm, color: Colors.white),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'de diferença entre o mais barato e o mais caro que têm a lista toda',
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                if (comparison.maxSavings > 0)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              formatBrl(comparison.maxSavings),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                                height: 1.0,
+                                letterSpacing: -0.8,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'de diferença entre o mais barato e o mais caro que têm a lista toda',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '-${comparison.maxSavingsPercent.round()}%',
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ],
+                  )
+                else
+                  Text(
+                    'É o único mercado com todos os itens da lista.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '-${comparison.maxSavingsPercent.round()}%',
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                ),
               ],
-            )
-          else
-            Text(
-              'É o único mercado com todos os itens da lista.',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 12, fontWeight: FontWeight.w500),
             ),
-        ],
-      ),
           ),
         ],
       ),
@@ -436,8 +452,9 @@ class _UnavailableNotice extends StatelessWidget {
   }
 }
 
-/// Buying each item where it is cheapest. The server doesn't weigh the trip,
-/// so the stops are shown next to the saving and the person decides.
+/// The list put together with each item where it is cheapest, even across
+/// several markets. Stands out (green, like a saving) because it is the
+/// cheapest way to buy the whole list; the stops say what to buy where.
 class _CombinationCard extends StatelessWidget {
   final BestCombination combination;
   final MarketComparison? bestMarket;
@@ -451,6 +468,10 @@ class _CombinationCard extends StatelessWidget {
     required this.onToggle,
   });
 
+  static const _green = AppColors.ok;
+  static const _greenDark = Color(0xFF166534);
+  static const _greenBright = Color(0xFF22A355);
+
   @override
   Widget build(BuildContext context) {
     final savings = combination.savingsVsBestSingle;
@@ -462,80 +483,204 @@ class _CombinationCard extends StatelessWidget {
     } else {
       detail = 'Nenhum mercado tem tudo: esta é a forma de comprar o que existe.';
     }
+    final faded = Colors.white.withValues(alpha: 0.88);
 
-    return AppCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      key: const ValueKey('combination-card'),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_greenBright, _green, _greenDark],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: _green.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 10))],
+      ),
+      child: Stack(
         children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onToggle,
-            child: Row(
+          Positioned(
+            right: -40,
+            top: -50,
+            child: Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.08)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const IconTile(Icons.alt_route, size: 38),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Comprando em ${combination.stops.length} mercados: ${formatBrl(combination.totalCost)}',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _ink),
+                Row(
+                  children: [
+                    const Icon(Icons.shopping_cart_checkout, color: Colors.white, size: 15),
+                    const SizedBox(width: 5),
+                    Text(
+                      'LISTA MAIS BARATA',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: faded, letterSpacing: 0.5),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Cada item no mercado onde ele sai mais barato',
+                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  formatBrl(combination.totalCost),
+                  style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900, height: 1.1),
+                ),
+                Text(
+                  'Comprando em ${combination.stops.length} mercados',
+                  style: TextStyle(color: faded, fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                Text(detail, style: TextStyle(color: faded, fontSize: 12)),
+                const SizedBox(height: 14),
+                Material(
+                  color: Colors.white,
+                  shape: const StadiumBorder(),
+                  child: InkWell(
+                    key: const ValueKey('combination-toggle'),
+                    customBorder: const StadiumBorder(),
+                    onTap: onToggle,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              expanded ? 'Esconder a lista montada' : 'Ver a lista montada',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: _greenDark, fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                            color: _greenDark,
+                            size: 20,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(detail, style: const TextStyle(fontSize: 11, color: Color(0xFF636366))),
-                    ],
+                    ),
                   ),
                 ),
-                Icon(expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: _gray),
+                if (expanded) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var i = 0; i < combination.stops.length; i++) ...[
+                          if (i > 0) const Divider(height: 22, color: AppColors.border),
+                          _StopSection(stop: combination.stops[i]),
+                        ],
+                        const SizedBox(height: 10),
+                        const Text(
+                          'O cálculo não considera o custo do deslocamento entre os mercados.',
+                          style: TextStyle(fontSize: 10, color: _gray, fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-          if (expanded) ...[
-            const SizedBox(height: 10),
-            for (final stop in combination.stops) ...[
-              InkWell(
-                onTap: () => showMarketDetails(context, stop.market, distanceKm: stop.distanceKm),
+        ],
+      ),
+    );
+  }
+}
+
+/// One market of the cheapest list: where it is, its subtotal and what to buy
+/// there.
+class _StopSection extends StatelessWidget {
+  final Stop stop;
+
+  const _StopSection({required this.stop});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => showMarketDetails(context, stop.market, distanceKm: stop.distanceKm),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              MarketAvatar(
+                initials: stop.market.initials,
+                primaryColor: stop.market.primaryColor,
+                backgroundColor: stop.market.backgroundColor,
+                size: 34,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            stop.market.name,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _ink),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          '${formatBrl(stop.subtotal)}${stop.distanceKm == null ? '' : ' · ${formatKm(stop.distanceKm!)}'}',
-                          style: const TextStyle(fontSize: 11, color: _gray),
-                        ),
-                      ],
+                    Text(
+                      stop.market.name,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _ink),
                     ),
                     MarketAddressLine(market: stop.market),
                   ],
                 ),
               ),
-              for (final line in stop.lines)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 2),
-                  child: Text(
-                    '${line.quantity}x ${line.productName}',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF636366)),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    formatBrl(stop.subtotal),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ok),
+                  ),
+                  if (stop.distanceKm != null)
+                    Text(formatKm(stop.distanceKm!), style: const TextStyle(fontSize: 11, color: _gray)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (final line in stop.lines)
+          Padding(
+            padding: const EdgeInsets.only(left: 44, bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${line.quantity}x ${line.productName}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF3A3A3C)),
+                      ),
+                      if (line.isSubstitute)
+                        Text(
+                          line.brand.isEmpty ? 'outra marca' : 'outra marca: ${line.brand}',
+                          style: const TextStyle(fontSize: 10, color: _amber, fontWeight: FontWeight.w600),
+                        ),
+                    ],
                   ),
                 ),
-              const SizedBox(height: 8),
-            ],
-            const Text(
-              'O cálculo não considera o custo do deslocamento entre os mercados.',
-              style: TextStyle(fontSize: 10, color: _gray, fontStyle: FontStyle.italic),
+                const SizedBox(width: 8),
+                Text(formatBrl(line.lineTotal), style: const TextStyle(fontSize: 12, color: _ink)),
+              ],
             ),
-          ],
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
@@ -572,10 +717,7 @@ class _MarketRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isBest ? AppColors.accentBg : Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isBest ? AppColors.brand : AppColors.border,
-                  width: isBest ? 2 : 1.0,
-                ),
+                border: Border.all(color: isBest ? AppColors.brand : AppColors.border, width: isBest ? 2 : 1.0),
               ),
               child: Row(
                 children: [
@@ -633,10 +775,15 @@ class _MarketRow extends StatelessWidget {
                               ),
                             ),
                             if (result.distanceKm != null)
-                              Text('· ${formatKm(result.distanceKm!)}', style: const TextStyle(fontSize: 11, color: _gray)),
+                              Text(
+                                '· ${formatKm(result.distanceKm!)}',
+                                style: const TextStyle(fontSize: 11, color: _gray),
+                              ),
                             if (result.substitutesCount > 0)
                               _Chip(
-                                text: result.substitutesCount == 1 ? '1 outra marca' : '${result.substitutesCount} outras marcas',
+                                text: result.substitutesCount == 1
+                                    ? '1 outra marca'
+                                    : '${result.substitutesCount} outras marcas',
                                 color: _amber,
                               ),
                             if (isBest) const _Chip(text: 'menor preço', color: _blue),
@@ -654,17 +801,19 @@ class _MarketRow extends StatelessWidget {
                     children: [
                       Text(
                         formatBrl(result.totalCost),
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: complete ? _ink : _gray,
-                        ),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: complete ? _ink : _gray),
                       ),
                       const SizedBox(height: 2),
                       if (!complete)
-                        const Text('parcial', style: TextStyle(color: _amber, fontSize: 10, fontWeight: FontWeight.bold))
+                        const Text(
+                          'parcial',
+                          style: TextStyle(color: _amber, fontSize: 10, fontWeight: FontWeight.bold),
+                        )
                       else if (isBest)
-                        const Text('melhor total', style: TextStyle(color: _blue, fontSize: 10, fontWeight: FontWeight.bold))
+                        const Text(
+                          'melhor total',
+                          style: TextStyle(color: _blue, fontSize: 10, fontWeight: FontWeight.bold),
+                        )
                       else
                         Text(
                           '+ ${formatBrl(result.difference)}',
@@ -696,7 +845,10 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
-      child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+      child: Text(
+        text,
+        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800),
+      ),
     );
   }
 }
@@ -740,10 +892,7 @@ class _Breakdown extends StatelessWidget {
                   const Icon(Icons.remove_circle_outline, size: 12, color: _red),
                   const SizedBox(width: 4),
                   Expanded(
-                    child: Text(
-                      'Não tem: ${missing.name}',
-                      style: const TextStyle(fontSize: 12, color: _red),
-                    ),
+                    child: Text('Não tem: ${missing.name}', style: const TextStyle(fontSize: 12, color: _red)),
                   ),
                 ],
               ),

@@ -7,11 +7,7 @@ import 'package:provider/provider.dart';
 import 'comparison_test_helpers.dart';
 
 /// Renders the comparison tab for a 2-item list against the fake backend.
-Future<AppState> pumpComparison(
-  WidgetTester tester,
-  FakeBackend backend, {
-  double width = 411,
-}) async {
+Future<AppState> pumpComparison(WidgetTester tester, FakeBackend backend, {double width = 411}) async {
   // tall enough that the whole list is built (ListView only builds what is visible)
   tester.view.physicalSize = Size(width, 2400);
   tester.view.devicePixelRatio = 1.0;
@@ -101,13 +97,19 @@ void main() {
     final backend = FakeBackend();
     await pumpComparison(tester, backend);
 
-    expect(find.text('Comprando em 2 mercados: R\$ 48,59'), findsOneWidget);
+    // the cheapest list stands out: its own card, total first, and a clear button
+    final card = find.byKey(const ValueKey('combination-card'));
+    expect(find.descendant(of: card, matching: find.text('LISTA MAIS BARATA')), findsOneWidget);
+    expect(find.descendant(of: card, matching: find.text('R\$ 48,59')), findsOneWidget);
+    expect(find.descendant(of: card, matching: find.text('Comprando em 2 mercados')), findsOneWidget);
+    expect(find.text('Ver a lista montada'), findsOneWidget);
     expect(find.textContaining('R\$ 3,00 a menos do que comprar tudo em Atacadão - Primavera'), findsOneWidget);
 
-    await tester.tap(find.textContaining('Comprando em 2 mercados'));
+    await tester.tap(find.text('Ver a lista montada'));
     await tester.pumpAndSettle();
 
     expect(find.text('O cálculo não considera o custo do deslocamento entre os mercados.'), findsOneWidget);
+    expect(find.text('Esconder a lista montada'), findsOneWidget);
   });
 
   testWidgets('the "other brands" switch asks the server again', (tester) async {
@@ -218,7 +220,7 @@ void main() {
       final backend = FakeBackend();
       await pumpComparison(tester, backend, width: width);
 
-      await tester.tap(find.textContaining('Comprando em 2 mercados'));
+      await tester.tap(find.text('Ver a lista montada'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Carvalho Super').last);
       await tester.pumpAndSettle();
