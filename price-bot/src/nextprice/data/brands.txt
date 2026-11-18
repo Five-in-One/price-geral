@@ -1,0 +1,171 @@
+# Marcas conhecidas, uma por linha: Nome canônico|apelido|apelido ...
+# - Acento, caixa e apóstrofo são ignorados na comparação.
+# - "@palavra" no fim: a marca só vale se o nome também contém essa palavra
+#   (ex.: "Original" é cerveja, mas também aparece em "Bis Original").
+# - Marcas com mais palavras vencem as menores ("Tixan Ypê" antes de "Ypê").
+# - Só entram MARCAS/fabricantes. Linhas de produto ("Alpino", "Kit Kat", "Corona
+#   Extra", "Skol Beats") ficam de fora: elas permanecem no nome genérico, senão
+#   dois produtos diferentes da mesma marca virariam "equivalentes".
+# Para ensinar uma marca nova, basta acrescentar uma linha aqui.
+Camil
+Sofia
+Kicaldo
+Ideal
+Sempre Verde
+Tio João
+Namorado
+Melitta
+3 Corações|Tres Coracoes
+Pilão
+Rancheiro
+Maratá|Marata
+Andorinha
+Olho D'água|Olho Dagua
+Caravelas
+União
+Da Terrinha
+Na Mesa
+Yoki
+Qualy
+Vigor
+Soya
+Vitalia
+Cisne
+Lebre
+BR Spices
+Kitano
+Dona Benta
+Royal
+Dr. Oetker|Dr Oetker
+Apti
+Itaiquara
+Sakura
+Cepêra|Cepera
+Heinz
+Hellmann's
+Hemmer
+Quero
+Maggi
+Sazón|Sazon
+Knorr
+Gomes da Costa
+Ipanema
+Kim
+Panco
+Vitarella
+Tomadoro
+Ducoco
+Bom Coco
+Sococo
+Menina
+Coringa
+Sicao
+Harald
+Lili
+Mococa
+Milk +|Milk
+Moça|Moca
+Marajoara
+Ninho
+Nestlé|Nestle
+Italac
+Itambé|Itambe
+Piracanjuba
+Damare
+Merilú|Merilu
+Belle
+Mucilon
+Nutella
+Ferrero
+Kinder
+Nissin
+Super Flocão|Super Flocao
+Sao Braz|São Braz
+
+Garoto
+Lacta
+Neugebauer
+Arcor
+Hershey's
+Trento
+Leão|Leao
+Trident
+
+Coca-Cola
+Sprite
+Antarctica|Antártica
+Tiss
+Gatorade
+Red Bull
+Yakult
+Crystal
+Nescau
+Maguary
+Skol
+Brahma
+Budweiser
+Corona
+Heineken
+Amstel
+Stella Artois
+Michelob
+Spaten
+Eisenbahn
+Itaipava
+Petra
+Império|Imperio
+Imigração|Imigracao
+Cerpa
+Lagunitas
+Baden Baden
+Roleta Russa
+Praya
+Wienbier
+Cusqueña|Cusquena
+Original@cerveja
+Freixenet
+Salton
+Perini
+Terranova
+Chandon
+Macaw
+Santa Helena
+Arbo
+Reguengos
+
+Ypê|Ype
+Tixan Ypê|Tixan Ype
+Pontal
+Elseve
+Sempre Livre
+Mili
+Max Pure
+Wyda
+Nadir
+Hidrofolhas
+Red Straw
+
+Cepi
+Tommy
+Magali
+
+# --- adicionadas a partir da coleta real do Carvalho
+Nutry
+Chocolatto
+Isis
+Lysoform|Lysorform
+Campo Largo|Campolargo
+Babysec
+Assolan
+Glade
+Seara
+Bokus
+Gelattus
+Toro Centenario|Toro Centenário
+Miolo
+San Martin
+Casillero del Diablo
+Bic
+Bohemia
+Q-vita|Qvita
+Sonho@amac
