@@ -1,0 +1,26 @@
+# Segredos e configuração local (use o .env.example de cada projeto)
+.env
+*.log
+
+# Go
+/price-*/bin/
+
+# Python (price-bot)
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Flutter (price-front-local)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+
+# Editores / SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
