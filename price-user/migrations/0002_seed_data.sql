@@ -1,0 +1,2 @@
+-- Demo data intentionally removed — production no longer seeds fake
+-- savings history. Test fixtures live in internal/testutil/db.go instead.
