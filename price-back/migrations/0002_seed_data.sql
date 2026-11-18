@@ -1,0 +1,2 @@
+-- Demo data intentionally removed — production no longer seeds fake
+-- markets/products. Test fixtures live in internal/testutil/db.go instead.

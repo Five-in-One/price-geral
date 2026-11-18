@@ -1,0 +1,44 @@
+# This Postgres instance is shared by all three Go services in this repo
+# (price-back, price-auth, price-user) — each owns its own database(s) on
+# it, no tables are shared across services. Only price-back's compose file
+# defines the container; the other two just connect to localhost:5432.
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: price_back_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: price_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - price_back_pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d price_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Message broker for the async flows between services (see
+  # internal/messaging). Port 15672 is the management UI (guest/guest).
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: price_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - price_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  price_back_pgdata:
+  price_rabbitmq_data:
