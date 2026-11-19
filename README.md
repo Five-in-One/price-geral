@@ -33,8 +33,10 @@ O app de produção (`price-front`, que usa `https://api.pricebrasil.com`) não 
    cd price-bot
    python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
    pip install -e ".[dev]"
-   python -m nextprice.collect_api
+   playwright install chromium   # navegador usado na coleta (sem ele a coleta falha)
+   python main.py worker         # consome os pedidos de coleta do Painel Admin (RabbitMQ)
    ```
+   Opcional: `python -m nextprice.collect_api` sobe a API de coleta direta na 8085.
 5. **Painéis** (a partir da raiz deste repositório):
    ```bash
    python -m http.server 8090 --directory price-admin-web
