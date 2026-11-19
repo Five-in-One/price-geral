@@ -1003,8 +1003,14 @@
 </div>
 
 <script>
-  const PRICE_BACK_URL = "http://localhost:8080";
-  const PRICE_AUTH_URL = "http://localhost:8081";
+  // Behind the Nginx gateway (docker compose, http://localhost/admin/ or
+  // /empresa/) every API is on the same origin: /api/... goes to price-back
+  // (3 load-balanced replicas) and /api/auth/... to price-auth. Opened from the
+  // dev servers (python -m http.server on 8090/8091) or as a file, the page
+  // talks to each service on its own port instead.
+  const VIA_GATEWAY = location.protocol.startsWith("http") && !["8090", "8091"].includes(location.port);
+  const PRICE_BACK_URL = VIA_GATEWAY ? location.origin : "http://localhost:8080";
+  const PRICE_AUTH_URL = VIA_GATEWAY ? location.origin + "/api" : "http://localhost:8081";
   const SESSION_KEY = "price_admin_session";
   const THEME_KEY = "price_admin_theme";
 
@@ -1208,6 +1214,21 @@
     showLogin();
   }
 
+  // Every call to price-back carries the session's JWT. price-back validates
+  // the signature: without a token, or with an expired/tampered one, it answers
+  // 401 and the panel goes back to the login screen.
+  async function backFetch(url, options = {}) {
+    const session = getSession();
+    const headers = { ...(options.headers || {}) };
+    if (session) headers.Authorization = "Bearer " + session.access_token;
+    const res = await fetch(url, { ...options, headers });
+    if (res.status === 401 && session) {
+      logout();
+      alert("Sua sessão expirou. Entre novamente.");
+    }
+    return res;
+  }
+
   // --- Pages (#mercados, #produtos, #catalogo, #coleta, #usuarios) -----------
 
   const PAGES = ["mercados", "produtos", "catalogo", "coleta", "usuarios"];
@@ -1265,7 +1286,7 @@
   async function saveCompanyMarket(market) {
     let res;
     try {
-      res = await fetch(PRICE_BACK_URL + "/api/markets", {
+      res = await backFetch(PRICE_BACK_URL + "/api/markets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(market),
@@ -1454,7 +1475,7 @@
     try {
       // price-back cria um job por link, publica um evento por job no
       // RabbitMQ e responde 202 na hora; os workers do bot dividem os jobs.
-      const res = await fetch(`${PRICE_BACK_URL}/api/markets/${id}/collect`, { method: "POST" });
+      const res = await backFetch(`${PRICE_BACK_URL}/api/markets/${id}/collect`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         statusEl.className = "error";
@@ -1501,7 +1522,7 @@
       await new Promise(r => setTimeout(r, JOB_POLL_MS));
       for (const id of ids) {
         if (finished.has(id)) continue;
-        const res = await fetch(`${PRICE_BACK_URL}/api/collect/jobs/${id}`);
+        const res = await backFetch(`${PRICE_BACK_URL}/api/collect/jobs/${id}`);
         if (!res.ok) continue;
         const job = await res.json();
         if (job.status === "succeeded" || job.status === "failed") finished.set(id, job);
@@ -1591,7 +1612,7 @@
     const count = document.getElementById("suggestionsCount");
     const badge = document.getElementById("navSuggestions");
     try {
-      const res = await fetch(`${PRICE_BACK_URL}/api/catalog/suggestions`);
+      const res = await backFetch(`${PRICE_BACK_URL}/api/catalog/suggestions`);
       const suggestions = await res.json();
       count.textContent = suggestions.length ? String(suggestions.length) : "";
       badge.textContent = suggestions.length ? String(suggestions.length) : "";
@@ -1640,7 +1661,7 @@
     const card = document.getElementById(`sugg-${id}`);
     card?.querySelectorAll("button").forEach(b => (b.disabled = true));
     try {
-      const res = await fetch(`${PRICE_BACK_URL}/api/catalog/suggestions/${id}/${accept ? "accept" : "reject"}`, { method: "POST" });
+      const res = await backFetch(`${PRICE_BACK_URL}/api/catalog/suggestions/${id}/${accept ? "accept" : "reject"}`, { method: "POST" });
       if (!res.ok && res.status !== 409) {
         const data = await res.json().catch(() => ({}));
         alert(data.error || "Não foi possível salvar a decisão.");
@@ -1658,7 +1679,7 @@
     statusEl.className = "";
     statusEl.textContent = "Reprocessando...";
     try {
-      const res = await fetch(`${PRICE_BACK_URL}/api/catalog/match`, { method: "POST" });
+      const res = await backFetch(`${PRICE_BACK_URL}/api/catalog/match`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || res.statusText);
       statusEl.className = "ok";
@@ -1866,7 +1887,7 @@
     statusEl.className = "";
     statusEl.textContent = "Adicionando...";
     try {
-      const res = await fetch(`${PRICE_BACK_URL}/api/markets/${editContext.id}/links`, {
+      const res = await backFetch(`${PRICE_BACK_URL}/api/markets/${editContext.id}/links`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
@@ -1898,7 +1919,7 @@
     statusEl.className = "";
     statusEl.textContent = "Removendo...";
     try {
-      const res = await fetch(`${PRICE_BACK_URL}/api/markets/${editContext.id}/links?url=${encodeURIComponent(url)}`, {
+      const res = await backFetch(`${PRICE_BACK_URL}/api/markets/${editContext.id}/links?url=${encodeURIComponent(url)}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -1982,7 +2003,7 @@
 
     btn.disabled = true;
     try {
-      const res = await fetch(PRICE_BACK_URL + path, {
+      const res = await backFetch(PRICE_BACK_URL + path, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -2054,7 +2075,7 @@
     openConfirm(`Excluir o mercado "${name}"? Os produtos cadastrados nele também serão excluídos.`, async () => {
       const statusEl = document.getElementById("confirmStatus");
       try {
-        const res = await fetch(`${PRICE_BACK_URL}/api/markets/${id}`, { method: "DELETE" });
+        const res = await backFetch(`${PRICE_BACK_URL}/api/markets/${id}`, { method: "DELETE" });
         if (!res.ok && res.status !== 204) {
           statusEl.className = "error";
           statusEl.textContent = "Não foi possível excluir o mercado.";
@@ -2076,7 +2097,7 @@
     openConfirm(`Excluir o produto "${name}"?`, async () => {
       const statusEl = document.getElementById("confirmStatus");
       try {
-        const res = await fetch(`${PRICE_BACK_URL}/api/products/${id}`, { method: "DELETE" });
+        const res = await backFetch(`${PRICE_BACK_URL}/api/products/${id}`, { method: "DELETE" });
         if (!res.ok && res.status !== 204) {
           statusEl.className = "error";
           statusEl.textContent = "Não foi possível excluir o produto.";
@@ -2162,7 +2183,7 @@
       // price-back salva o mercado e o job, publica collect.requested no
       // RabbitMQ e responde 202 na hora. Um worker do bot faz a coleta em
       // segundo plano; aqui só acompanhamos o job.
-      const res = await fetch(PRICE_BACK_URL + "/api/admin/collect", {
+      const res = await backFetch(PRICE_BACK_URL + "/api/admin/collect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

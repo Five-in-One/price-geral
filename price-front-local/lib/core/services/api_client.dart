@@ -35,8 +35,10 @@ class ApiClient {
 
   /// The production API, which serves every route under one base URL.
   /// Override it with `--dart-define=API_BASE_URL=<url>`.
-  static const String productionUrl =
-      String.fromEnvironment('API_BASE_URL', defaultValue: 'https://api.pricebrasil.com');
+  static const String productionUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://api.pricebrasil.com',
+  );
 
   /// Host of the local backend services. This copy of the app (price-front-local)
   /// always talks to them; by default through the dev machine's LAN IP, which
@@ -49,6 +51,19 @@ class ApiClient {
   /// Whether the app runs against the local services instead of production.
   /// Always true in price-front-local.
   static bool get usesLocalServices => true;
+
+  /// Whether the local services are reached through the Nginx gateway
+  /// (docker compose: one port for everything, price-back load-balanced over
+  /// 3 replicas). Pass `--dart-define=API_GATEWAY=false` to talk to each
+  /// service on its own port (8080/8081/8082) when running them with `go run`.
+  static const bool viaGateway = bool.fromEnvironment('API_GATEWAY', defaultValue: true);
+
+  /// Port the gateway listens on (`--dart-define=API_GATEWAY_PORT=<port>`).
+  static const int gatewayPort = int.fromEnvironment('API_GATEWAY_PORT', defaultValue: 80);
+
+  /// Base URL on the gateway. [prefix] is `/api` for price-auth, whose
+  /// `/auth/...` routes the gateway publishes as `/api/auth/...`.
+  static String gatewayUrl([String prefix = '']) => '${hostUrlForPort(gatewayPort)}$prefix';
 
   /// Resolves the base URL for a local service running on [port] on the host
   /// machine. With [_hostOverride] set, every service uses that host.
@@ -67,9 +82,7 @@ class ApiClient {
   }
 
   Uri _uri(String path, [Map<String, String>? query]) {
-    return Uri.parse('$baseUrl$path').replace(
-      queryParameters: (query == null || query.isEmpty) ? null : query,
-    );
+    return Uri.parse('$baseUrl$path').replace(queryParameters: (query == null || query.isEmpty) ? null : query);
   }
 
   /// [token] is a price-auth access token, sent as `Authorization: Bearer`.
@@ -97,11 +110,7 @@ class ApiClient {
     debugPrint('[API] --> POST $uri');
     try {
       res = await _client
-          .post(
-            uri,
-            headers: {'Content-Type': 'application/json', ..._authHeaders(token)},
-            body: jsonEncode(body),
-          )
+          .post(uri, headers: {'Content-Type': 'application/json', ..._authHeaders(token)}, body: jsonEncode(body))
           .timeout(const Duration(seconds: 10));
     } catch (e) {
       debugPrint('[API] xxx POST $uri falhou em ${stopwatch.elapsedMilliseconds}ms: ${e.runtimeType}: $e');
@@ -126,8 +135,7 @@ class ApiClient {
     return _decode(res);
   }
 
-  Map<String, String> _authHeaders(String? token) =>
-      token == null ? const {} : {'Authorization': 'Bearer $token'};
+  Map<String, String> _authHeaders(String? token) => token == null ? const {} : {'Authorization': 'Bearer $token'};
 
   /// Logs status, latency and size. The body is only printed for non-2xx
   /// responses (truncated): successful bodies can hold auth tokens.

@@ -19,6 +19,7 @@ type routerConfig struct {
 	geocoder  geo.Geocoder
 	reverse   geo.ReverseGeocoder
 	publisher messaging.Publisher
+	guard     authGuard
 }
 
 // WithGeocoder turns on address geocoding: markets registered with an
@@ -42,6 +43,14 @@ func WithPublisher(p messaging.Publisher) Option {
 	return func(c *routerConfig) { c.publisher = p }
 }
 
+// WithAuth makes price-back a Resource Server: write and admin routes require
+// a valid HS256 token signed by price-auth with this secret (401 without it or
+// with a tampered one, 403 with the wrong role). Read routes the app uses
+// anonymously (markets, product search, comparisons) stay public.
+func WithAuth(jwtSecret string) Option {
+	return func(c *routerConfig) { c.guard = authGuard{secret: []byte(jwtSecret)} }
+}
+
 // NewRouter builds the full HTTP router for the API, wiring every route
 // group against the given database pool.
 func NewRouter(pool *pgxpool.Pool, opts ...Option) *chi.Mux {
@@ -51,6 +60,7 @@ func NewRouter(pool *pgxpool.Pool, opts ...Option) *chi.Mux {
 	}
 
 	r := chi.NewRouter()
+	r.Use(instanceHeader)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
@@ -59,7 +69,8 @@ func NewRouter(pool *pgxpool.Pool, opts ...Option) *chi.Mux {
 		// CORS at all).
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		ExposedHeaders:   []string{"X-Instance"},
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
@@ -74,13 +85,14 @@ func NewRouter(pool *pgxpool.Pool, opts ...Option) *chi.Mux {
 	}
 
 	r.Route("/api", func(api chi.Router) {
-		api.Mount("/markets", marketsRouter(pool, cfg.geocoder, collect))
-		api.Mount("/products", productsRouter(pool))
+		g := cfg.guard
+		api.Mount("/markets", marketsRouter(pool, cfg.geocoder, collect, g))
+		api.Mount("/products", productsRouter(pool, g))
 		api.Mount("/comparisons", comparisonsRouter(pool))
-		api.Mount("/catalog", catalogRouter(pool))
+		api.Mount("/catalog", catalogRouter(pool, g))
 		api.Mount("/geocode", geocodeRouter(cfg.reverse))
-		api.Post("/admin/collect", collect.requireBroker(collect.collect))
-		api.Get("/collect/jobs/{id}", collect.getJob)
+		api.With(g.admin()).Post("/admin/collect", collect.requireBroker(collect.collect))
+		api.With(g.admin()).Get("/collect/jobs/{id}", collect.getJob)
 	})
 
 	return r

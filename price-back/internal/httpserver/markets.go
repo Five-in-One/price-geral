@@ -25,17 +25,17 @@ const (
 	defaultRadiusKm = 5.0
 )
 
-func marketsRouter(pool *pgxpool.Pool, geocoder geo.Geocoder, collect *collectHandlers) chi.Router {
+func marketsRouter(pool *pgxpool.Pool, geocoder geo.Geocoder, collect *collectHandlers, g authGuard) chi.Router {
 	repo := repository.NewMarketsRepo(pool)
 
 	r := chi.NewRouter()
 	r.Get("/", listMarketsHandler(repo))
-	r.Post("/", createMarketHandler(repo, geocoder))
-	r.Patch("/{id}", updateMarketHandler(repo, geocoder))
-	r.Delete("/{id}", deleteMarketHandler(repo))
-	r.Post("/{id}/links", addMarketLinkHandler(repo))
-	r.Delete("/{id}/links", removeMarketLinkHandler(repo))
-	r.Post("/{id}/collect", collect.requireBroker(collect.reload))
+	r.With(g.admin()).Post("/", createMarketHandler(repo, geocoder))
+	r.With(g.staff()).Patch("/{id}", updateMarketHandler(repo, geocoder))
+	r.With(g.admin()).Delete("/{id}", deleteMarketHandler(repo))
+	r.With(g.admin()).Post("/{id}/links", addMarketLinkHandler(repo))
+	r.With(g.admin()).Delete("/{id}/links", removeMarketLinkHandler(repo))
+	r.With(g.admin()).Post("/{id}/collect", collect.requireBroker(collect.reload))
 	return r
 }
 

@@ -2,6 +2,7 @@ package httpserver_test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -208,4 +209,25 @@ func TestShoppingLists_LimitPerUser(t *testing.T) {
 	replace := doListRequest(t, router, http.MethodPost, "/api/shopping-lists",
 		map[string]any{"name": "Lista ", "items": sampleItems()[:1]}, token)
 	require.Equal(t, http.StatusOK, replace.Code)
+}
+
+// Entrega 4: every price-user business route rejects a missing token and a
+// token whose payload was edited after signing (e.g. role user -> admin).
+func TestBusinessRoutes_RejectMissingAndTamperedTokens(t *testing.T) {
+	router := httpserver.NewRouter(testutil.NewTestPool(t), "test-secret")
+
+	parts := strings.Split(tokenFor(t, "user-1"), ".")
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	payload["role"] = "admin"
+	changed, err := json.Marshal(payload)
+	require.NoError(t, err)
+	forged := parts[0] + "." + base64.RawURLEncoding.EncodeToString(changed) + "." + parts[2]
+
+	for _, path := range []string{"/api/shopping-lists", "/api/economy/summary", "/api/savings-history"} {
+		require.Equal(t, http.StatusUnauthorized, doListRequest(t, router, http.MethodGet, path, nil, "").Code, path)
+		require.Equal(t, http.StatusUnauthorized, doListRequest(t, router, http.MethodGet, path, nil, forged).Code, path)
+	}
 }

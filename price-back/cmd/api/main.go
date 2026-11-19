@@ -46,6 +46,7 @@ func main() {
 		httpserver.WithGeocoder(nominatim),
 		httpserver.WithReverseGeocoder(nominatim),
 		httpserver.WithPublisher(broker),
+		httpserver.WithAuth(cfg.JWTSecret),
 	)
 
 	log.Printf("price-back listening on :%s", cfg.Port)

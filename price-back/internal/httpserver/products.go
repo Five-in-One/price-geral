@@ -15,7 +15,7 @@ import (
 	"priceback/internal/repository"
 )
 
-func productsRouter(pool *pgxpool.Pool) chi.Router {
+func productsRouter(pool *pgxpool.Pool, g authGuard) chi.Router {
 	productsRepo := repository.NewProductsRepo(pool)
 	marketsRepo := repository.NewMarketsRepo(pool)
 	catalogRepo := repository.NewCatalogRepo(pool)
@@ -24,9 +24,9 @@ func productsRouter(pool *pgxpool.Pool) chi.Router {
 	r.Get("/", listProductsHandler(productsRepo))
 	r.Get("/search", searchProductsHandler(productsRepo, marketsRepo))
 	r.Get("/categories", productCategoriesHandler(productsRepo, marketsRepo))
-	r.Post("/", createProductHandler(productsRepo, marketsRepo, catalogRepo))
-	r.Patch("/{id}", updateProductHandler(productsRepo, catalogRepo))
-	r.Delete("/{id}", deleteProductHandler(productsRepo))
+	r.With(g.staff()).Post("/", createProductHandler(productsRepo, marketsRepo, catalogRepo))
+	r.With(g.staff()).Patch("/{id}", updateProductHandler(productsRepo, catalogRepo))
+	r.With(g.staff()).Delete("/{id}", deleteProductHandler(productsRepo))
 	return r
 }
 

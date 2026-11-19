@@ -14,16 +14,16 @@ import (
 
 // catalogRouter serves the canonical catalog: real-world products with every
 // market's offer, plus the review queue for doubtful matches.
-func catalogRouter(pool *pgxpool.Pool) chi.Router {
+func catalogRouter(pool *pgxpool.Pool, g authGuard) chi.Router {
 	repo := repository.NewCatalogRepo(pool)
 
 	r := chi.NewRouter()
 	r.Get("/items", listCatalogItemsHandler(repo))
 	r.Get("/items/{id}", getCatalogItemHandler(repo))
-	r.Post("/match", matchCatalogHandler(repo))
-	r.Get("/suggestions", listSuggestionsHandler(repo))
-	r.Post("/suggestions/{id}/accept", decideSuggestionHandler(repo, true))
-	r.Post("/suggestions/{id}/reject", decideSuggestionHandler(repo, false))
+	r.With(g.admin()).Post("/match", matchCatalogHandler(repo))
+	r.With(g.admin()).Get("/suggestions", listSuggestionsHandler(repo))
+	r.With(g.admin()).Post("/suggestions/{id}/accept", decideSuggestionHandler(repo, true))
+	r.With(g.admin()).Post("/suggestions/{id}/reject", decideSuggestionHandler(repo, false))
 	return r
 }
 

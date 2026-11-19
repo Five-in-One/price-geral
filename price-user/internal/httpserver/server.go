@@ -25,11 +25,12 @@ func NewRouter(pool *pgxpool.Pool, jwtSecret string) *chi.Mux {
 	r.Get("/health", healthHandler(pool))
 
 	r.Route("/api", func(api chi.Router) {
-		api.Mount("/savings-history", savingsHistoryRouter(pool))
-		api.Mount("/economy", economyRouter(pool))
-
+		// Every business route is behind the JWT check (Resource Server):
+		// 401 without a token or with one whose signature does not match.
 		api.Group(func(protected chi.Router) {
 			protected.Use(requireAuth(jwtSecret))
+			protected.Mount("/savings-history", savingsHistoryRouter(pool))
+			protected.Mount("/economy", economyRouter(pool))
 			protected.Mount("/shopping-lists", shoppingListsRouter(pool))
 		})
 	})

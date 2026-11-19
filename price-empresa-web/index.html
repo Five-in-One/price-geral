@@ -879,8 +879,14 @@
 </div>
 
 <script>
-  const PRICE_BACK_URL = "http://localhost:8080";
-  const PRICE_AUTH_URL = "http://localhost:8081";
+  // Behind the Nginx gateway (docker compose, http://localhost/admin/ or
+  // /empresa/) every API is on the same origin: /api/... goes to price-back
+  // (3 load-balanced replicas) and /api/auth/... to price-auth. Opened from the
+  // dev servers (python -m http.server on 8090/8091) or as a file, the page
+  // talks to each service on its own port instead.
+  const VIA_GATEWAY = location.protocol.startsWith("http") && !["8090", "8091"].includes(location.port);
+  const PRICE_BACK_URL = VIA_GATEWAY ? location.origin : "http://localhost:8080";
+  const PRICE_AUTH_URL = VIA_GATEWAY ? location.origin + "/api" : "http://localhost:8081";
   const SESSION_KEY = "price_empresa_session";
   const THEME_KEY = "price_empresa_theme";
 
@@ -1100,6 +1106,21 @@
     showLogin();
   }
 
+  // Every call to price-back carries the session's JWT. price-back validates
+  // the signature: without a token, or with an expired/tampered one, it answers
+  // 401 and the panel goes back to the login screen.
+  async function backFetch(url, options = {}) {
+    const session = getSession();
+    const headers = { ...(options.headers || {}) };
+    if (session) headers.Authorization = "Bearer " + session.access_token;
+    const res = await fetch(url, { ...options, headers });
+    if (res.status === 401 && session) {
+      logout();
+      alert("Sua sessão expirou. Entre novamente.");
+    }
+    return res;
+  }
+
   // --- Pages (#produtos, #perfil) -------------------------------------------
 
   const PAGES = ["produtos", "perfil"];
@@ -1127,7 +1148,7 @@
   async function loadOwnMarket() {
     const marketId = session?.user?.market_id;
     try {
-      const res = await fetch(PRICE_BACK_URL + "/api/markets?all=true");
+      const res = await backFetch(PRICE_BACK_URL + "/api/markets?all=true");
       const markets = await res.json();
       ownMarket = marketId ? markets.find(m => m.id === marketId) || null : null;
       document.getElementById("marketOptions").innerHTML =
@@ -1279,7 +1300,7 @@
     btn.disabled = true;
     setStatus("status", "", "Salvando...");
     try {
-      const res = await fetch(PRICE_BACK_URL + "/api/products", {
+      const res = await backFetch(PRICE_BACK_URL + "/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1365,7 +1386,7 @@
         return;
       }
       try {
-        const res = await fetch(`${PRICE_BACK_URL}/api/products/${encodeURIComponent(p.id)}`, {
+        const res = await backFetch(`${PRICE_BACK_URL}/api/products/${encodeURIComponent(p.id)}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1392,7 +1413,7 @@
       `<p>Excluir <strong>${escapeHtml(p.name)}</strong>? Ele deixa de aparecer no app do Price.</p>`,
       "Excluir", true, async () => {
       try {
-        const res = await fetch(`${PRICE_BACK_URL}/api/products/${encodeURIComponent(p.id)}`, { method: "DELETE" });
+        const res = await backFetch(`${PRICE_BACK_URL}/api/products/${encodeURIComponent(p.id)}`, { method: "DELETE" });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           setStatus("modalStatus", "error", "Erro: " + (data.error || res.statusText));
@@ -1473,7 +1494,7 @@
     btn.disabled = true;
     setStatus("profileStatus", "", "Salvando e localizando o endereço no mapa... pode levar alguns segundos.");
     try {
-      const res = await fetch(`${PRICE_BACK_URL}/api/markets/${encodeURIComponent(ownMarket.id)}`, {
+      const res = await backFetch(`${PRICE_BACK_URL}/api/markets/${encodeURIComponent(ownMarket.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

@@ -27,7 +27,12 @@ class ApiService {
   static ApiClient? _production;
 
   static ApiClient _defaultClient(int localPort) {
-    if (ApiClient.usesLocalServices) return ApiClient(baseUrl: ApiClient.hostUrlForPort(localPort));
+    if (ApiClient.usesLocalServices) {
+      if (ApiClient.viaGateway) {
+        return ApiClient(baseUrl: ApiClient.gatewayUrl(localPort == ApiPorts.auth ? '/api' : ''));
+      }
+      return ApiClient(baseUrl: ApiClient.hostUrlForPort(localPort));
+    }
     return _production ??= ApiClient(baseUrl: ApiClient.productionUrl);
   }
 

@@ -1,0 +1,97 @@
+{
+  "info": {
+    "name": "Price - Entrega 4 (JWT + Nginx)",
+    "description": "Criterios de aceitacao da Entrega 4. Rode em ordem. A variavel {{gateway}} aponta para o Nginx (http://localhost).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "gateway", "value": "http://localhost" },
+    { "key": "username", "value": "usuario-demo" },
+    { "key": "password", "value": "SenhaDemo123!" },
+    { "key": "token", "value": "" },
+    { "key": "forged_token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Seguranca",
+      "item": [
+        {
+          "name": "1. Rota protegida sem token (espera 401)",
+          "request": { "method": "GET", "url": "{{gateway}}/api/catalog/suggestions" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401 sem token', () => pm.response.to.have.status(401));"] } }]
+        },
+        {
+          "name": "2a. Criar conta (1a vez; 409 se ja existe)",
+          "request": {
+            "method": "POST",
+            "url": "{{gateway}}/api/auth/signup",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}" }
+          }
+        },
+        {
+          "name": "2b. Login no Authorization Server (guarda o JWT)",
+          "request": {
+            "method": "POST",
+            "url": "{{gateway}}/api/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 no login', () => pm.response.to.have.status(200));",
+            "const token = pm.response.json().access_token;",
+            "pm.collectionVariables.set('token', token);",
+            "// Mesma adulteracao feita no jwt.io: troca role user -> admin no payload e mantem a assinatura.",
+            "const p = token.split('.');",
+            "const b64 = s => s.replace(/-/g, '+').replace(/_/g, '/');",
+            "const payload = JSON.parse(atob(b64(p[1])));",
+            "console.log('payload original', payload);",
+            "payload.role = 'admin';",
+            "const enc = btoa(JSON.stringify(payload)).replace(/=+$/, '').replace(/\\+/g, '-').replace(/\\//g, '_');",
+            "pm.collectionVariables.set('forged_token', p[0] + '.' + enc + '.' + p[2]);"
+          ] } }]
+        },
+        {
+          "name": "3. Rota protegida com token verdadeiro de usuario (espera 403)",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway}}/api/catalog/suggestions",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('403: assinatura ok, papel sem permissao', () => pm.response.to.have.status(403));"] } }]
+        },
+        {
+          "name": "4. Rota protegida com token adulterado role=admin (espera 401)",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway}}/api/catalog/suggestions",
+            "header": [{ "key": "Authorization", "value": "Bearer {{forged_token}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('401: assinatura nao confere', () => pm.response.to.have.status(401));"] } }]
+        },
+        {
+          "name": "5. Lista salva do usuario no price-user com token (espera 200)",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway}}/api/shopping-lists",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('200', () => pm.response.to.have.status(200));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Escalabilidade",
+      "item": [
+        {
+          "name": "Requisicao balanceada (rode 5 a 10 vezes; veja X-Instance)",
+          "request": { "method": "GET", "url": "{{gateway}}/api/markets" },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200', () => pm.response.to.have.status(200));",
+            "console.log('atendido por', pm.response.headers.get('X-Instance'), pm.response.headers.get('X-Upstream'));"
+          ] } }]
+        }
+      ]
+    }
+  ]
+}

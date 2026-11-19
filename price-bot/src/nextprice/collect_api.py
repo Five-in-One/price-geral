@@ -28,6 +28,7 @@ from nextprice.browser import (
     scroll_to_load,
 )
 from nextprice.categorize import classify_by_keywords, guess_unit
+from nextprice.price_back_auth import post_with_auth
 from nextprice.pricing import parse_price_brl
 from nextprice.product_parser import parse_product_name, price_back_fields
 from nextprice.stores.base import StoreConfig
@@ -185,7 +186,8 @@ def register_market(payload: CollectRequest, client: httpx.Client | None = None)
         client = httpx.Client(timeout=15)
 
     try:
-        resp = client.post(
+        resp = post_with_auth(
+            client,
             f"{PRICE_BACK_URL}/api/markets",
             json={
                 "name": payload.market_name,
@@ -258,7 +260,7 @@ def push_to_price_back(
                 }
                 if collected_at:
                     body["collected_at"] = collected_at
-                resp = client.post(f"{PRICE_BACK_URL}/api/products", json=body)
+                resp = post_with_auth(client, f"{PRICE_BACK_URL}/api/products", json=body)
                 if resp.status_code == 201:
                     inserted.append(resp.json())
                 else:

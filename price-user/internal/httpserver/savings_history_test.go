@@ -18,6 +18,7 @@ func TestListSavingsHistory_ReturnsSeededItemsNewestFirst(t *testing.T) {
 	router := httpserver.NewRouter(pool, "test-secret")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/savings-history", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, "user-1"))
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
