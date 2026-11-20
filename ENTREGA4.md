@@ -79,7 +79,7 @@ preservação de contexto:
 **Escalabilidade horizontal:**
 - `price-back` tem `deploy.replicas: 3`.
 - O bloco `upstream price_back` usa **Round Robin**, o algoritmo padrão do Nginx.
-- `resolve` mantém a lista de réplicas atualizada pelo DNS do Docker.
+- Quando o Nginx sobe, o nome `price-back` resolve para os 3 contêineres. A lista fica fixa, então uma réplica que cai continua nela e é tratada pelo failover.
 - `max_fails=1 fail_timeout=10s` tira do rodízio uma réplica que falhou.
 - `proxy_next_upstream error timeout http_502 http_503 http_504` reenvia a requisição para outra réplica quando a escolhida está fora do ar.
 
